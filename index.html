@@ -174,8 +174,8 @@
 <div class="toast" id="toast">座標已複製！</div>
 
 <script>
-    // 1. 設定你的 Supabase 憑證 (請至 Supabase -> Settings -> API 複製)
-    const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co/rest/v1/'; 
+    // 1. 設定你的 Supabase 憑證 (已修正網址格式，移除了後續的 rest/v1/)
+    const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
 
     // 初始化 Supabase 用戶端
@@ -193,30 +193,25 @@
         gallery.innerHTML = '<div class="loading-text">雲端資料載入中...</div>';
 
         try {
-            // 開始向 Supabase 資料庫查詢
-            // 假設你在 Supabase 建立的資料表名稱叫做 'maps'
             let query = supabase.from('maps').select('*');
 
-            // 如果有指定大洲，加上篩選條件
             if (filter !== '全部') {
                 query = query.eq('continent', filter);
             }
 
-            // 依照建立時間排序 (最新的在前面)
             query = query.order('created_at', { ascending: false });
 
             const { data, error } = await query;
 
             if (error) throw error;
 
-            gallery.innerHTML = ''; // 清空加載中文字
+            gallery.innerHTML = ''; 
 
             if (!data || data.length === 0) {
                 gallery.innerHTML = '<div class="loading-text">目前沒有這區的紀錄。</div>';
                 return;
             }
 
-            // 渲染卡片
             data.forEach(record => {
                 const coordText = `${record.latitude}, ${record.longitude}`;
                 const card = document.createElement('div');
@@ -243,7 +238,6 @@
         }
     }
 
-    // 核心功能：新增紀錄到雲端 (上傳圖片 + 寫入資料庫)
     // 核心功能：新增紀錄到雲端 (包含自動拆解經緯度格式)
     async function addRecord() {
         const photoInput = document.getElementById('photoInput');
@@ -257,13 +251,9 @@
         }
 
         // --- 自動拆解座標字串的邏輯 ---
-        // 1. 先去掉可能存在的括號 ( ) 或 [ ] 
         let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
-        
-        // 2. 以逗號進行切割
         let coordArray = cleanCoords.split(',');
 
-        // 3. 檢查切割後是否剛好是兩個部分，且轉換成數字後不是 NaN
         if (coordArray.length !== 2 || isNaN(coordArray[0]) || isNaN(coordArray[1])) {
             alert('座標格式不正確！請確認是否為「緯度,經度」並以英文字符的逗號隔開。');
             return;
@@ -271,7 +261,6 @@
 
         const lat = parseFloat(coordArray[0]);
         const lng = parseFloat(coordArray[1]);
-        // --------------------------------
 
         // 停用按鈕避免重複點擊
         submitBtn.disabled = true;
@@ -304,8 +293,8 @@
                 .insert([
                     { 
                         continent: continent, 
-                        latitude: lat,  // 已拆解好的緯度數字
-                        longitude: lng, // 已拆解好的經度數字
+                        latitude: lat,  
+                        longitude: lng, 
                         photo_url: publicPhotoUrl 
                     }
                 ]);
@@ -319,7 +308,6 @@
             document.getElementById('coordsInput').value = '';
             document.getElementById('continentInput').value = '';
 
-            // 重新刷新列表
             fetchAndRenderGallery();
 
         } catch (err) {
@@ -331,67 +319,7 @@
         }
     }
 
-        // 停用按鈕避免重複點擊
-        submitBtn.disabled = true;
-        submitBtn.innerText = '正在上傳照片到雲端...';
-
-        try {
-            const file = photoInput.files[0];
-            // 為了避免檔名重複覆蓋，使用時間戳當作新檔名
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-
-            // 步驟一：上傳實體圖片到 Supabase Storage (儲存桶名稱需為 'photos')
-            const { data: storageData, error: storageError } = await supabase.storage
-                .from('photos')
-                .upload(fileName, file);
-
-            if (storageError) throw storageError;
-
-            // 步驟二：取得圖片的公開網路網址
-            const { data: urlData } = supabase.storage
-                .from('photos')
-                .getPublicUrl(fileName);
-            
-            const publicPhotoUrl = urlData.publicUrl;
-
-            submitBtn.innerText = '正在寫入資料庫...';
-
-            // 步驟三：將文字欄位與圖片網址一併寫入 Database 資料表 'maps'
-            const { error: dbError } = await supabase
-                .from('maps')
-                .insert([
-                    { 
-                        continent: continent, 
-                        latitude: parseFloat(lat), 
-                        longitude: parseFloat(lng), 
-                        photo_url: publicPhotoUrl 
-                    }
-                ]);
-
-            if (dbError) throw dbError;
-
-            alert('成功上傳並保存至雲端！');
-            
-            // 表單清空
-            photoInput.value = '';
-            document.getElementById('latInput').value = '';
-            document.getElementById('lngInput').value = '';
-            document.getElementById('continentInput').value = '';
-
-            // 重新刷新列表
-            fetchAndRenderGallery();
-
-        } catch (err) {
-            console.error('上傳失敗詳細資訊:', err);
-            alert('發生錯誤: ' + err.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerText = '新增紀錄到雲端';
-        }
-    }
-
-    // 長按與複製邏輯 (保持與原本相同)
+    // 長按與複製邏輯
     function setupLongPress(element, textToCopy) {
         let pressTimer;
         const duration = 600;
