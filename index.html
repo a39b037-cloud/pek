@@ -102,7 +102,6 @@
         }
         .gallery {
             display: grid;
-            /* 電腦版預設：自動填滿，每張最少 250px */
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 20px;
         }
@@ -169,21 +168,20 @@
             color: #888;
         }
 
-        /* 📱 專屬手機版設定：當螢幕寬度小於 600px 時觸發 */
+        /* 📱 專屬手機版設定 */
         @media (max-width: 600px) {
             .gallery {
-                /* 強制切換為一行 2 排 */
                 grid-template-columns: repeat(2, 1fr);
-                gap: 10px; /* 縮小卡片間距 */
+                gap: 10px;
             }
             .card img {
-                height: 140px; /* 縮小圖片高度，避免看起來太細長 */
+                height: 140px;
             }
             .card-info {
                 padding: 10px;
             }
             .coordinate {
-                font-size: 11px; /* 稍微縮小座標字體，避免在小格中斷行破版 */
+                font-size: 11px;
                 padding: 8px 4px;
             }
             .continent-tag {
@@ -191,7 +189,6 @@
                 padding: 3px 6px;
                 margin-bottom: 8px;
             }
-            /* 將篩選列稍微調整，讓手機上看起來更整齊 */
             .filter-section {
                 flex-direction: column;
                 align-items: stretch;
@@ -210,10 +207,13 @@
 
     <div class="control-panel hidden-panel" id="inputPanel">
         <input type="file" id="photoInput" accept="image/*" class="full-width">
-        <input type="text" id="coordsInput" class="full-width" placeholder="貼上座標 (例: 25.0339, 121.5644 或帶有括號)">
+        <input type="text" id="coordsInput" class="full-width" placeholder="貼上座標 (例: 25.0339, 121.5644)">
         <select id="continentInput" class="full-width">
-            <option value="" disabled selected>選擇大洲</option>
-            <option value="亞洲">亞洲</option>
+            <option value="" disabled selected>選擇地區</option>
+            <option value="台灣">台灣</option>
+            <option value="日本">日本</option>
+            <option value="韓國">韓國</option>
+            <option value="亞洲">亞洲(其他)</option>
             <option value="歐洲">歐洲</option>
             <option value="北美洲">北美洲</option>
             <option value="南美洲">南美洲</option>
@@ -225,10 +225,13 @@
     </div>
 
     <div class="filter-section">
-        <strong>🔍 依大洲尋找：</strong>
+        <strong>🔍 依地區尋找：</strong>
         <select id="filterSelect" onchange="fetchAndRenderGallery()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
             <option value="全部">全部顯示</option>
-            <option value="亞洲">亞洲</option>
+            <option value="台灣">台灣</option>
+            <option value="日本">日本</option>
+            <option value="韓國">韓國</option>
+            <option value="亞洲">亞洲(其他)</option>
             <option value="歐洲">歐洲</option>
             <option value="北美洲">北美洲</option>
             <option value="南美洲">南美洲</option>
@@ -271,6 +274,7 @@
         }
     }
 
+    // 監聽座標輸入，智慧判斷大洲或特定國家
     let autoDetectTimer;
     document.getElementById('coordsInput').addEventListener('input', function(e) {
         clearTimeout(autoDetectTimer);
@@ -289,13 +293,34 @@
                     const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-TW`);
                     const data = await res.json();
                     
-                    const continentMap = { 'AF': '非洲', 'AN': '南極洲', 'AS': '亞洲', 'EU': '歐洲', 'NA': '北美洲', 'OC': '大洋洲', 'SA': '南美洲' };
+                    let detectedRegion = "";
 
-                    if (data.continentCode && continentMap[data.continentCode]) {
-                        document.getElementById('continentInput').value = continentMap[data.continentCode];
+                    // 1. 先精準判斷是否為特定的熱門國家/地區 (使用國家代碼)
+                    if (data.countryCode === 'TW') {
+                        detectedRegion = "台灣";
+                    } else if (data.countryCode === 'JP') {
+                        detectedRegion = "日本";
+                    } else if (data.countryCode === 'KR') {
+                        detectedRegion = "韓國";
+                    } else if (data.continentCode) {
+                        // 2. 如果不是台日韓，則退回原本的大洲分類
+                        const continentMap = { 
+                            'AF': '非洲', 'AN': '南極洲', 'EU': '歐洲', 
+                            'NA': '北美洲', 'OC': '大洋洲', 'SA': '南美洲' 
+                        };
+                        
+                        if (data.continentCode === 'AS') {
+                            detectedRegion = "亞洲"; // 其他亞洲國家
+                        } else {
+                            detectedRegion = continentMap[data.continentCode] || "";
+                        }
+                    }
+
+                    if (detectedRegion) {
+                        document.getElementById('continentInput').value = detectedRegion;
                         const toast = document.getElementById('toast');
                         const countryInfo = data.countryName ? `${data.countryName} ` : '';
-                        toast.innerText = `🌍 已自動定位：${countryInfo}(${continentMap[data.continentCode]})`;
+                        toast.innerText = `🌍 已自動定位：${countryInfo}`;
                         
                         toast.style.display = 'block';
                         setTimeout(() => { toast.style.opacity = '1'; }, 10);
@@ -337,7 +362,6 @@
                 const coordText = `${record.latitude}, ${record.longitude}`;
                 const card = document.createElement('div');
                 card.className = 'card';
-                // 修改處：將 onclick 直接綁定，並改文字為 (點擊複製)
                 card.innerHTML = `
                     <img src="${record.photo_url}" alt="Location Photo">
                     <div class="card-info">
@@ -363,7 +387,7 @@
         const submitBtn = document.getElementById('submitBtn');
 
         if (!photoInput.files[0] || !coordsInput || !continent) {
-            alert('請選擇照片、貼上座標並確認大洲已被選取！');
+            alert('請選擇照片、貼上座標並確認地區已被選取！');
             return;
         }
 
@@ -421,7 +445,6 @@
         }
     }
 
-    // 更新後的複製函數 (依賴直接點擊觸發)
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             const toast = document.getElementById('toast');
