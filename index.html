@@ -23,7 +23,6 @@
             text-align: center;
             color: var(--primary);
         }
-        /* 新增：開關按鈕的樣式 */
         .toggle-btn-container {
             text-align: center;
             margin-bottom: 20px;
@@ -44,11 +43,9 @@
             color: white;
             transform: translateY(-2px);
         }
-        /* 新增：隱藏面板的類別 */
         .hidden-panel {
             display: none !important;
         }
-        
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -62,7 +59,6 @@
             display: grid;
             gap: 15px;
             grid-template-columns: 1fr 1fr;
-            /* 加入轉場動畫讓顯示更順暢 */
             animation: fadeIn 0.3s ease;
         }
         @keyframes fadeIn {
@@ -147,6 +143,11 @@
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
+            transition: background 0.2s;
+        }
+        /* 增加點擊時的回饋效果 */
+        .coordinate:active {
+            background: #e0e0e0;
         }
         .toast {
             position: fixed;
@@ -214,18 +215,14 @@
 <div class="toast" id="toast">座標已複製！</div>
 
 <script>
-    // 1. 設定你的 Supabase 憑證
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
-
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 網頁載入完成後自動抓取資料
     window.onload = function() {
         fetchAndRenderGallery();
     };
 
-    // --- 新增：切換輸入面板顯示/隱藏的功能 ---
     function toggleInputPanel() {
         const panel = document.getElementById('inputPanel');
         const btn = document.getElementById('togglePanelBtn');
@@ -244,9 +241,7 @@
             btn.style.color = 'var(--primary)';
         }
     }
-    // ----------------------------------------
 
-    // 自動判斷大洲的功能
     let autoDetectTimer;
     document.getElementById('coordsInput').addEventListener('input', function(e) {
         clearTimeout(autoDetectTimer);
@@ -254,7 +249,6 @@
         
         autoDetectTimer = setTimeout(async () => {
             if (!val) return;
-
             let cleanCoords = val.replace(/[\(\)\[\]\s]/g, ''); 
             let coordArray = cleanCoords.split(',');
 
@@ -266,19 +260,10 @@
                     const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-TW`);
                     const data = await res.json();
                     
-                    const continentMap = {
-                        'AF': '非洲',
-                        'AN': '南極洲',
-                        'AS': '亞洲',
-                        'EU': '歐洲',
-                        'NA': '北美洲',
-                        'OC': '大洋洲',
-                        'SA': '南美洲'
-                    };
+                    const continentMap = { 'AF': '非洲', 'AN': '南極洲', 'AS': '亞洲', 'EU': '歐洲', 'NA': '北美洲', 'OC': '大洋洲', 'SA': '南美洲' };
 
                     if (data.continentCode && continentMap[data.continentCode]) {
                         document.getElementById('continentInput').value = continentMap[data.continentCode];
-                        
                         const toast = document.getElementById('toast');
                         const countryInfo = data.countryName ? `${data.countryName} ` : '';
                         toast.innerText = `🌍 已自動定位：${countryInfo}(${continentMap[data.continentCode]})`;
@@ -300,7 +285,6 @@
         }, 800);
     });
 
-    // 讀取資料並渲染畫面
     async function fetchAndRenderGallery() {
         const gallery = document.getElementById('gallery');
         const filter = document.getElementById('filterSelect').value;
@@ -308,169 +292,11 @@
 
         try {
             let query = supabaseClient.from('maps').select('*');
-
-            if (filter !== '全部') {
-                query = query.eq('continent', filter);
-            }
-
+            if (filter !== '全部') query = query.eq('continent', filter);
             query = query.order('created_at', { ascending: false });
 
             const { data, error } = await query;
-
             if (error) throw error;
-
             gallery.innerHTML = ''; 
 
             if (!data || data.length === 0) {
-                gallery.innerHTML = '<div class="loading-text">目前沒有這區的紀錄。</div>';
-                return;
-            }
-
-            data.forEach(record => {
-                const coordText = `${record.latitude}, ${record.longitude}`;
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <img src="${record.photo_url}" alt="Location Photo">
-                    <div class="card-info">
-                        <div class="continent-tag">${record.continent}</div>
-                        <div class="coordinate" data-coord="${coordText}">
-                            ${coordText}<br>
-                            <small style="font-size: 10px; color: #888;">(長按複製)</small>
-                        </div>
-                    </div>
-                `;
-                gallery.appendChild(card);
-
-                const coordElement = card.querySelector('.coordinate');
-                setupLongPress(coordElement, coordText);
-            });
-
-        } catch (err) {
-            console.error('讀取資料失敗:', err.message);
-            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認資料庫權限。</div>';
-        }
-    }
-
-    // 新增紀錄到雲端
-    async function addRecord() {
-        const photoInput = document.getElementById('photoInput');
-        const coordsInput = document.getElementById('coordsInput').value.trim();
-        const continent = document.getElementById('continentInput').value;
-        const submitBtn = document.getElementById('submitBtn');
-
-        if (!photoInput.files[0] || !coordsInput || !continent) {
-            alert('請選擇照片、貼上座標並確認大洲已被選取！');
-            return;
-        }
-
-        let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
-        let coordArray = cleanCoords.split(',');
-
-        if (coordArray.length !== 2 || isNaN(coordArray[0]) || isNaN(coordArray[1])) {
-            alert('座標格式不正確！請確認是否為「緯度,經度」');
-            return;
-        }
-
-        const lat = parseFloat(coordArray[0]);
-        const lng = parseFloat(coordArray[1]);
-
-        submitBtn.disabled = true;
-        submitBtn.innerText = '正在上傳照片到雲端...';
-
-        try {
-            const file = photoInput.files[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-
-            const { data: storageData, error: storageError } = await supabaseClient.storage
-                .from('photos')
-                .upload(fileName, file);
-
-            if (storageError) throw storageError;
-
-            const { data: urlData } = supabaseClient.storage
-                .from('photos')
-                .getPublicUrl(fileName);
-            
-            const publicPhotoUrl = urlData.publicUrl;
-
-            submitBtn.innerText = '正在寫入資料庫...';
-
-            const { error: dbError } = await supabaseClient
-                .from('maps')
-                .insert([
-                    { 
-                        continent: continent, 
-                        latitude: lat,  
-                        longitude: lng, 
-                        photo_url: publicPhotoUrl 
-                    }
-                ]);
-
-            if (dbError) throw dbError;
-            
-            // 上傳成功後的動作
-            photoInput.value = '';
-            document.getElementById('coordsInput').value = '';
-            document.getElementById('continentInput').selectedIndex = 0; 
-
-            // 自動收起新增面板
-            toggleInputPanel();
-            
-            // 重新讀取畫面
-            fetchAndRenderGallery();
-
-            // 稍微延遲一下再顯示成功，體驗更好
-            setTimeout(() => {
-                alert('成功上傳並保存至雲端！');
-            }, 300);
-
-        } catch (err) {
-            console.error('上傳失敗:', err);
-            alert('上傳發生錯誤: ' + err.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerText = '上傳至雲端';
-        }
-    }
-
-    // 長按與複製邏輯
-    function setupLongPress(element, textToCopy) {
-        let pressTimer;
-        const duration = 600;
-
-        const startPress = (e) => {
-            if(e.type === 'mousedown' && e.button !== 0) return; 
-            pressTimer = setTimeout(() => { copyToClipboard(textToCopy); }, duration);
-        };
-
-        const cancelPress = () => {
-            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-        };
-
-        element.addEventListener('mousedown', startPress);
-        element.addEventListener('touchstart', startPress, {passive: true});
-        element.addEventListener('mouseup', cancelPress);
-        element.addEventListener('mouseleave', cancelPress);
-        element.addEventListener('touchend', cancelPress);
-        element.addEventListener('touchcancel', cancelPress);
-    }
-
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            const toast = document.getElementById('toast');
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.opacity = '1'; }, 10);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => { toast.style.display = 'none'; }, 300);
-            }, 2000);
-        }).catch(err => {
-            alert('複製失敗，請手動複製。');
-        });
-    }
-</script>
-
-</body>
-</html>
