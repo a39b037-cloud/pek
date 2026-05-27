@@ -178,15 +178,15 @@
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
 
-    // 初始化 Supabase 用戶端
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // 【重大修正：修改變數名稱為 supabaseClient 以避免名稱衝突造成當機】
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // 網頁載入完成後，自動從雲端抓取一次資料
     window.onload = function() {
         fetchAndRenderGallery();
     };
 
-    // 監聽座標輸入，自動判斷大洲
+    // 自動判斷大洲的功能
     let autoDetectTimer;
     document.getElementById('coordsInput').addEventListener('input', function(e) {
         clearTimeout(autoDetectTimer);
@@ -234,20 +234,21 @@
                         }, 3000);
                     }
                 } catch (err) {
-                    console.log('自動判斷地區失敗功能暫時無法使用', err);
+                    console.log('自動判斷地區失敗', err);
                 }
             }
         }, 800);
     });
 
-    // 核心功能：從雲端資料庫讀取資料並渲染畫面
+    // 讀取資料並渲染畫面
     async function fetchAndRenderGallery() {
         const gallery = document.getElementById('gallery');
         const filter = document.getElementById('filterSelect').value;
         gallery.innerHTML = '<div class="loading-text">雲端資料載入中...</div>';
 
         try {
-            let query = supabase.from('maps').select('*');
+            // 使用修正後的 supabaseClient
+            let query = supabaseClient.from('maps').select('*');
 
             if (filter !== '全部') {
                 query = query.eq('continent', filter);
@@ -288,11 +289,11 @@
 
         } catch (err) {
             console.error('讀取資料失敗:', err.message);
-            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認 Supabase 的 Table 名稱是否為 maps，且 RLS 是否已關閉。</div>';
+            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認資料庫權限設定(RLS)已關閉。</div>';
         }
     }
 
-    // 核心功能：新增紀錄到雲端
+    // 新增紀錄到雲端
     async function addRecord() {
         const photoInput = document.getElementById('photoInput');
         const coordsInput = document.getElementById('coordsInput').value.trim();
@@ -323,15 +324,14 @@
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            // 1. 上傳照片到 Storage (需確認建立名為 photos 的 bucket)
-            const { data: storageData, error: storageError } = await supabase.storage
+            // 使用修正後的 supabaseClient
+            const { data: storageData, error: storageError } = await supabaseClient.storage
                 .from('photos')
                 .upload(fileName, file);
 
             if (storageError) throw storageError;
 
-            // 2. 取得圖片公開網址
-            const { data: urlData } = supabase.storage
+            const { data: urlData } = supabaseClient.storage
                 .from('photos')
                 .getPublicUrl(fileName);
             
@@ -339,8 +339,7 @@
 
             submitBtn.innerText = '正在寫入資料庫...';
 
-            // 3. 寫入資料表 (需確認建立名為 maps 的 table)
-            const { error: dbError } = await supabase
+            const { error: dbError } = await supabaseClient
                 .from('maps')
                 .insert([
                     { 
@@ -362,8 +361,8 @@
             fetchAndRenderGallery();
 
         } catch (err) {
-            console.error('上傳失敗詳細資訊:', err);
-            alert('上傳失敗: ' + err.message);
+            console.error('上傳失敗:', err);
+            alert('上傳發生錯誤: ' + err.message + '\n\n請確認 Supabase 的 Storage / Database 權限是否已經開啟。');
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerText = '新增紀錄到雲端';
