@@ -123,15 +123,31 @@
         .card-info {
             padding: 15px;
         }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
         .continent-tag {
-            display: inline-block;
             background: #E1F0FF;
             color: var(--primary);
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 12px;
             font-weight: bold;
-            margin-bottom: 10px;
+        }
+        .report-btn {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 13px;
+            cursor: pointer;
+            transition: color 0.2s;
+            padding: 0;
+        }
+        .report-btn:hover {
+            color: #e74c3c;
         }
         .coordinate {
             background: #f0f0f0;
@@ -168,31 +184,72 @@
             color: #888;
         }
 
-        /* 📱 專屬手機版設定 */
+        /* --- 新增：回報視窗的樣式 --- */
+        .modal-overlay {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--text);
+        }
+        .modal-content textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .modal-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .cancel-btn {
+            background: #eee;
+            color: #555;
+        }
+        .submit-report-btn {
+            background: #e74c3c;
+            color: white;
+        }
+
         @media (max-width: 600px) {
             .gallery {
                 grid-template-columns: repeat(2, 1fr);
                 gap: 10px;
             }
-            .card img {
-                height: 140px;
-            }
-            .card-info {
-                padding: 10px;
-            }
-            .coordinate {
-                font-size: 11px;
-                padding: 8px 4px;
-            }
-            .continent-tag {
-                font-size: 11px;
-                padding: 3px 6px;
-                margin-bottom: 8px;
-            }
-            .filter-section {
-                flex-direction: column;
-                align-items: stretch;
-            }
+            .card img { height: 140px; }
+            .card-info { padding: 10px; }
+            .coordinate { font-size: 11px; padding: 8px 4px; }
+            .continent-tag { font-size: 11px; padding: 3px 6px; }
+            .report-btn { font-size: 11px; }
+            .filter-section { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
@@ -246,10 +303,25 @@
 
 <div class="toast" id="toast">座標已複製！</div>
 
+<div class="modal-overlay" id="reportModal">
+    <div class="modal-content">
+        <h3>⚠️ 錯誤回報</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 5px;">請簡述這筆紀錄的問題（例如：座標定位錯誤、照片與地點不符等）。</p>
+        <textarea id="reportReason" placeholder="輸入回報內容..."></textarea>
+        <div class="modal-actions">
+            <button class="modal-btn cancel-btn" onclick="closeReportModal()">取消</button>
+            <button class="modal-btn submit-report-btn" id="submitReportBtn" onclick="submitReport()">送出回報</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 用來記錄當前被點擊報錯的資料 ID
+    let currentReportId = null;
 
     window.onload = function() {
         fetchAndRenderGallery();
@@ -258,7 +330,6 @@
     function toggleInputPanel() {
         const panel = document.getElementById('inputPanel');
         const btn = document.getElementById('togglePanelBtn');
-        
         if (panel.classList.contains('hidden-panel')) {
             panel.classList.remove('hidden-panel');
             btn.innerText = '✖ 關閉面板';
@@ -274,67 +345,40 @@
         }
     }
 
-    // 監聽座標輸入，智慧判斷大洲或特定國家
+    // 自動判斷地區
     let autoDetectTimer;
     document.getElementById('coordsInput').addEventListener('input', function(e) {
         clearTimeout(autoDetectTimer);
         const val = e.target.value.trim();
-        
         autoDetectTimer = setTimeout(async () => {
             if (!val) return;
             let cleanCoords = val.replace(/[\(\)\[\]\s]/g, ''); 
             let coordArray = cleanCoords.split(',');
-
             if (coordArray.length === 2 && !isNaN(coordArray[0]) && !isNaN(coordArray[1])) {
                 const lat = parseFloat(coordArray[0]);
                 const lng = parseFloat(coordArray[1]);
-
                 try {
                     const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-TW`);
                     const data = await res.json();
-                    
                     let detectedRegion = "";
-
-                    // 1. 先精準判斷是否為特定的熱門國家/地區 (使用國家代碼)
-                    if (data.countryCode === 'TW') {
-                        detectedRegion = "台灣";
-                    } else if (data.countryCode === 'JP') {
-                        detectedRegion = "日本";
-                    } else if (data.countryCode === 'KR') {
-                        detectedRegion = "韓國";
-                    } else if (data.continentCode) {
-                        // 2. 如果不是台日韓，則退回原本的大洲分類
-                        const continentMap = { 
-                            'AF': '非洲', 'AN': '南極洲', 'EU': '歐洲', 
-                            'NA': '北美洲', 'OC': '大洋洲', 'SA': '南美洲' 
-                        };
-                        
-                        if (data.continentCode === 'AS') {
-                            detectedRegion = "亞洲"; // 其他亞洲國家
-                        } else {
-                            detectedRegion = continentMap[data.continentCode] || "";
-                        }
+                    if (data.countryCode === 'TW') detectedRegion = "台灣";
+                    else if (data.countryCode === 'JP') detectedRegion = "日本";
+                    else if (data.countryCode === 'KR') detectedRegion = "韓國";
+                    else if (data.continentCode) {
+                        const continentMap = { 'AF': '非洲', 'AN': '南極洲', 'EU': '歐洲', 'NA': '北美洲', 'OC': '大洋洲', 'SA': '南美洲' };
+                        if (data.continentCode === 'AS') detectedRegion = "亞洲";
+                        else detectedRegion = continentMap[data.continentCode] || "";
                     }
-
                     if (detectedRegion) {
                         document.getElementById('continentInput').value = detectedRegion;
                         const toast = document.getElementById('toast');
                         const countryInfo = data.countryName ? `${data.countryName} ` : '';
                         toast.innerText = `🌍 已自動定位：${countryInfo}`;
-                        
                         toast.style.display = 'block';
                         setTimeout(() => { toast.style.opacity = '1'; }, 10);
-                        setTimeout(() => {
-                            toast.style.opacity = '0';
-                            setTimeout(() => { 
-                                toast.style.display = 'none'; 
-                                toast.innerText = '座標已複製！'; 
-                            }, 300);
-                        }, 3000);
+                        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; toast.innerText = '座標已複製！'; }, 300); }, 3000);
                     }
-                } catch (err) {
-                    console.log('自動定位失敗', err);
-                }
+                } catch (err) { console.log('自動定位失敗', err); }
             }
         }, 800);
     });
@@ -362,10 +406,14 @@
                 const coordText = `${record.latitude}, ${record.longitude}`;
                 const card = document.createElement('div');
                 card.className = 'card';
+                // 修改處：加入卡片標頭 (card-header)，裡面包含地區標籤與報錯按鈕
                 card.innerHTML = `
                     <img src="${record.photo_url}" alt="Location Photo">
                     <div class="card-info">
-                        <div class="continent-tag">${record.continent}</div>
+                        <div class="card-header">
+                            <div class="continent-tag">${record.continent}</div>
+                            <button class="report-btn" onclick="openReportModal(${record.id})">⚠️ 報錯</button>
+                        </div>
                         <div class="coordinate" onclick="copyToClipboard('${coordText}')">
                             ${coordText}<br>
                             <small style="font-size: 10px; color: #888;">(點擊複製)</small>
@@ -387,76 +435,99 @@
         const submitBtn = document.getElementById('submitBtn');
 
         if (!photoInput.files[0] || !coordsInput || !continent) {
-            alert('請選擇照片、貼上座標並確認地區已被選取！');
-            return;
+            alert('請選擇照片、貼上座標並確認地區已被選取！'); return;
         }
 
         let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
         let coordArray = cleanCoords.split(',');
-
         if (coordArray.length !== 2 || isNaN(coordArray[0]) || isNaN(coordArray[1])) {
-            alert('座標格式不正確！請確認是否為「緯度,經度」');
-            return;
+            alert('座標格式不正確！請確認是否為「緯度,經度」'); return;
         }
 
         const lat = parseFloat(coordArray[0]);
         const lng = parseFloat(coordArray[1]);
 
         submitBtn.disabled = true;
-        submitBtn.innerText = '正在上傳照片到雲端...';
+        submitBtn.innerText = '正在上傳...';
 
         try {
             const file = photoInput.files[0];
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            const { data: storageData, error: storageError } = await supabaseClient.storage
-                .from('photos')
-                .upload(fileName, file);
-
+            const { data: storageData, error: storageError } = await supabaseClient.storage.from('photos').upload(fileName, file);
             if (storageError) throw storageError;
 
-            const { data: urlData } = supabaseClient.storage
-                .from('photos')
-                .getPublicUrl(fileName);
-            
+            const { data: urlData } = supabaseClient.storage.from('photos').getPublicUrl(fileName);
             const publicPhotoUrl = urlData.publicUrl;
-            submitBtn.innerText = '正在寫入資料庫...';
+            submitBtn.innerText = '寫入資料庫...';
 
-            const { error: dbError } = await supabaseClient
-                .from('maps')
-                .insert([{ continent: continent, latitude: lat, longitude: lng, photo_url: publicPhotoUrl }]);
-
+            const { error: dbError } = await supabaseClient.from('maps').insert([{ continent: continent, latitude: lat, longitude: lng, photo_url: publicPhotoUrl }]);
             if (dbError) throw dbError;
             
-            photoInput.value = '';
-            document.getElementById('coordsInput').value = '';
-            document.getElementById('continentInput').selectedIndex = 0; 
-            toggleInputPanel();
-            fetchAndRenderGallery();
-
+            photoInput.value = ''; document.getElementById('coordsInput').value = ''; document.getElementById('continentInput').selectedIndex = 0; 
+            toggleInputPanel(); fetchAndRenderGallery();
             setTimeout(() => { alert('成功上傳並保存至雲端！'); }, 300);
         } catch (err) {
-            console.error('上傳失敗:', err);
             alert('上傳發生錯誤: ' + err.message);
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerText = '上傳至雲端';
+            submitBtn.disabled = false; submitBtn.innerText = '上傳至雲端';
+        }
+    }
+
+    // --- 新增：報錯相關邏輯 ---
+    function openReportModal(id) {
+        currentReportId = id;
+        document.getElementById('reportReason').value = ''; // 清空輸入框
+        document.getElementById('reportModal').style.display = 'flex';
+    }
+
+    function closeReportModal() {
+        currentReportId = null;
+        document.getElementById('reportModal').style.display = 'none';
+    }
+
+    async function submitReport() {
+        const reason = document.getElementById('reportReason').value.trim();
+        const reportBtn = document.getElementById('submitReportBtn');
+
+        if (!reason) {
+            alert('請稍微描述一下錯誤情形！');
+            return;
+        }
+
+        reportBtn.disabled = true;
+        reportBtn.innerText = '送出中...';
+
+        try {
+            const { error } = await supabaseClient
+                .from('reports')
+                .insert([{ target_id: currentReportId, reason: reason }]);
+
+            if (error) throw error;
+
+            alert('回報成功！感謝您的協助。');
+            closeReportModal();
+        } catch (err) {
+            console.error('回報失敗:', err);
+            alert('回報失敗，請確認資料庫 reports 資料表與權限已設定正確。');
+        } finally {
+            reportBtn.disabled = false;
+            reportBtn.innerText = '送出回報';
         }
     }
 
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             const toast = document.getElementById('toast');
+            toast.innerText = '座標已複製！';
             toast.style.display = 'block';
             setTimeout(() => { toast.style.opacity = '1'; }, 10);
             setTimeout(() => {
                 toast.style.opacity = '0';
                 setTimeout(() => { toast.style.display = 'none'; }, 300);
             }, 2000);
-        }).catch(err => {
-            alert('複製失敗，請手動複製。');
-        });
+        }).catch(err => { alert('複製失敗，請手動複製。'); });
     }
 </script>
 
