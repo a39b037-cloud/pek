@@ -173,8 +173,7 @@
 
 <div class="toast" id="toast">座標已複製！</div>
 
-<script>
-    // 1. 設定你的 Supabase 憑證 (已修正網址格式，移除了後續的 rest/v1/)
+// 1. 設定你的 Supabase 憑證
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
 
@@ -185,6 +184,70 @@
     window.onload = function() {
         fetchAndRenderGallery();
     };
+
+    // ==========================================
+    // 🌟 新增功能：監聽座標輸入，自動判斷大洲
+    // ==========================================
+    let autoDetectTimer;
+    document.getElementById('coordsInput').addEventListener('input', function(e) {
+        clearTimeout(autoDetectTimer);
+        const val = e.target.value.trim();
+        
+        // 延遲 0.8 秒執行，避免使用者手動打字時狂發請求
+        autoDetectTimer = setTimeout(async () => {
+            if (!val) return;
+
+            let cleanCoords = val.replace(/[\(\)\[\]\s]/g, ''); 
+            let coordArray = cleanCoords.split(',');
+
+            // 確認輸入的是正確的兩個數字 (緯度與經度)
+            if (coordArray.length === 2 && !isNaN(coordArray[0]) && !isNaN(coordArray[1])) {
+                const lat = parseFloat(coordArray[0]);
+                const lng = parseFloat(coordArray[1]);
+
+                try {
+                    // 呼叫免費免金鑰的地理定位 API
+                    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-TW`);
+                    const data = await res.json();
+                    
+                    // 將 API 回傳的代碼對應到我們選單的大洲名稱
+                    const continentMap = {
+                        'AF': '非洲',
+                        'AN': '南極洲',
+                        'AS': '亞洲',
+                        'EU': '歐洲',
+                        'NA': '北美洲',
+                        'OC': '大洋洲',
+                        'SA': '南美洲'
+                    };
+
+                    if (data.continentCode && continentMap[data.continentCode]) {
+                        // 自動切換大洲下拉選單
+                        document.getElementById('continentInput').value = continentMap[data.continentCode];
+                        
+                        // 彈出貼心提示，讓使用者知道自動定位成功
+                        const toast = document.getElementById('toast');
+                        // 如果在海中央可能沒有國家名，就只顯示大洲
+                        const countryInfo = data.countryName ? `${data.countryName} ` : '';
+                        toast.innerText = `🌍 已自動定位：${countryInfo}(${continentMap[data.continentCode]})`;
+                        
+                        toast.style.display = 'block';
+                        setTimeout(() => { toast.style.opacity = '1'; }, 10);
+                        setTimeout(() => {
+                            toast.style.opacity = '0';
+                            setTimeout(() => { 
+                                toast.style.display = 'none'; 
+                                toast.innerText = '座標已複製！'; // 恢復原本的複製提示文字
+                            }, 300);
+                        }, 3000);
+                    }
+                } catch (err) {
+                    console.log('自動判斷地區失敗', err);
+                }
+            }
+        }, 800);
+    });
+    // ==========================================
 
     // 核心功能：從雲端資料庫讀取資料並渲染畫面
     async function fetchAndRenderGallery() {
@@ -238,7 +301,7 @@
         }
     }
 
-    // 核心功能：新增紀錄到雲端 (包含自動拆解經緯度格式)
+    // 核心功能：新增紀錄到雲端
     async function addRecord() {
         const photoInput = document.getElementById('photoInput');
         const coordsInput = document.getElementById('coordsInput').value.trim();
@@ -246,11 +309,10 @@
         const submitBtn = document.getElementById('submitBtn');
 
         if (!photoInput.files[0] || !coordsInput || !continent) {
-            alert('請完整填寫所有欄位並選擇照片！');
+            alert('請完整填寫所有欄位並選擇照片！(貼上座標後會自動判斷大洲)');
             return;
         }
 
-        // --- 自動拆解座標字串的邏輯 ---
         let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
         let coordArray = cleanCoords.split(',');
 
@@ -262,7 +324,6 @@
         const lat = parseFloat(coordArray[0]);
         const lng = parseFloat(coordArray[1]);
 
-        // 停用按鈕避免重複點擊
         submitBtn.disabled = true;
         submitBtn.innerText = '正在上傳照片到雲端...';
 
@@ -271,14 +332,12 @@
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            // 步驟一：上傳實體圖片到 Supabase Storage
             const { data: storageData, error: storageError } = await supabase.storage
                 .from('photos')
                 .upload(fileName, file);
 
             if (storageError) throw storageError;
 
-            // 步驟二：取得圖片的公開網路網址
             const { data: urlData } = supabase.storage
                 .from('photos')
                 .getPublicUrl(fileName);
@@ -287,7 +346,6 @@
 
             submitBtn.innerText = '正在寫入資料庫...';
 
-            // 步驟三：將文字欄位與圖片網址一併寫入 Database 資料表 'maps'
             const { error: dbError } = await supabase
                 .from('maps')
                 .insert([
@@ -303,10 +361,10 @@
 
             alert('成功上傳並保存至雲端！');
             
-            // 表單清空
             photoInput.value = '';
             document.getElementById('coordsInput').value = '';
-            document.getElementById('continentInput').value = '';
+            // 讓下拉選單恢復預設
+            document.getElementById('continentInput').selectedIndex = 0; 
 
             fetchAndRenderGallery();
 
@@ -354,7 +412,6 @@
             alert('複製失敗，請手動複製。');
         });
     }
-</script>
 
 </body>
 </html>
