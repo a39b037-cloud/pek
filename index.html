@@ -140,8 +140,7 @@
 
     <div class="control-panel">
         <input type="file" id="photoInput" accept="image/*" class="full-width">
-        <input type="text" id="latInput" placeholder="緯度 (例: 25.0339)">
-        <input type="text" id="lngInput" placeholder="經度 (例: 121.5644)">
+        <input type="text" id="coordsInput" class="full-width" placeholder="貼上座標 (例: 25.0339, 121.5644 或帶有括號)">
         <select id="continentInput" class="full-width">
             <option value="" disabled selected>選擇大洲</option>
             <option value="亞洲">亞洲</option>
@@ -245,17 +244,92 @@
     }
 
     // 核心功能：新增紀錄到雲端 (上傳圖片 + 寫入資料庫)
+    // 核心功能：新增紀錄到雲端 (包含自動拆解經緯度格式)
     async function addRecord() {
         const photoInput = document.getElementById('photoInput');
-        const lat = document.getElementById('latInput').value.trim();
-        const lng = document.getElementById('lngInput').value.trim();
+        const coordsInput = document.getElementById('coordsInput').value.trim();
         const continent = document.getElementById('continentInput').value;
         const submitBtn = document.getElementById('submitBtn');
 
-        if (!photoInput.files[0] || !lat || !lng || !continent) {
+        if (!photoInput.files[0] || !coordsInput || !continent) {
             alert('請完整填寫所有欄位並選擇照片！');
             return;
         }
+
+        // --- 自動拆解座標字串的邏輯 ---
+        // 1. 先去掉可能存在的括號 ( ) 或 [ ] 
+        let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
+        
+        // 2. 以逗號進行切割
+        let coordArray = cleanCoords.split(',');
+
+        // 3. 檢查切割後是否剛好是兩個部分，且轉換成數字後不是 NaN
+        if (coordArray.length !== 2 || isNaN(coordArray[0]) || isNaN(coordArray[1])) {
+            alert('座標格式不正確！請確認是否為「緯度,經度」並以英文字符的逗號隔開。');
+            return;
+        }
+
+        const lat = parseFloat(coordArray[0]);
+        const lng = parseFloat(coordArray[1]);
+        // --------------------------------
+
+        // 停用按鈕避免重複點擊
+        submitBtn.disabled = true;
+        submitBtn.innerText = '正在上傳照片到雲端...';
+
+        try {
+            const file = photoInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}.${fileExt}`;
+
+            // 步驟一：上傳實體圖片到 Supabase Storage
+            const { data: storageData, error: storageError } = await supabase.storage
+                .from('photos')
+                .upload(fileName, file);
+
+            if (storageError) throw storageError;
+
+            // 步驟二：取得圖片的公開網路網址
+            const { data: urlData } = supabase.storage
+                .from('photos')
+                .getPublicUrl(fileName);
+            
+            const publicPhotoUrl = urlData.publicUrl;
+
+            submitBtn.innerText = '正在寫入資料庫...';
+
+            // 步驟三：將文字欄位與圖片網址一併寫入 Database 資料表 'maps'
+            const { error: dbError } = await supabase
+                .from('maps')
+                .insert([
+                    { 
+                        continent: continent, 
+                        latitude: lat,  // 已拆解好的緯度數字
+                        longitude: lng, // 已拆解好的經度數字
+                        photo_url: publicPhotoUrl 
+                    }
+                ]);
+
+            if (dbError) throw dbError;
+
+            alert('成功上傳並保存至雲端！');
+            
+            // 表單清空
+            photoInput.value = '';
+            document.getElementById('coordsInput').value = '';
+            document.getElementById('continentInput').value = '';
+
+            // 重新刷新列表
+            fetchAndRenderGallery();
+
+        } catch (err) {
+            console.error('上傳失敗詳細資訊:', err);
+            alert('發生錯誤: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = '新增紀錄到雲端';
+        }
+    }
 
         // 停用按鈕避免重複點擊
         submitBtn.disabled = true;
