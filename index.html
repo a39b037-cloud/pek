@@ -23,6 +23,32 @@
             text-align: center;
             color: var(--primary);
         }
+        /* 新增：開關按鈕的樣式 */
+        .toggle-btn-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .toggle-btn {
+            background-color: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .toggle-btn:hover {
+            background-color: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+        /* 新增：隱藏面板的類別 */
+        .hidden-panel {
+            display: none !important;
+        }
+        
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -36,6 +62,12 @@
             display: grid;
             gap: 15px;
             grid-template-columns: 1fr 1fr;
+            /* 加入轉場動畫讓顯示更順暢 */
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .control-panel select, .control-panel input, .control-panel button {
             padding: 10px;
@@ -43,7 +75,7 @@
             border-radius: 8px;
             font-size: 16px;
         }
-        .control-panel button {
+        .control-panel button.submit-btn {
             background-color: var(--primary);
             color: white;
             border: none;
@@ -52,10 +84,10 @@
             grid-column: span 2;
             transition: background 0.2s;
         }
-        .control-panel button:hover {
+        .control-panel button.submit-btn:hover {
             background-color: #357ABD;
         }
-        .control-panel button:disabled {
+        .control-panel button.submit-btn:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
@@ -67,6 +99,10 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
         .gallery {
             display: grid;
@@ -85,7 +121,7 @@
         }
         .card img {
             width: 100%;
-            height: 200px;
+            height: 250px;
             object-fit: cover;
         }
         .card-info {
@@ -138,7 +174,11 @@
 <div class="container">
     <h1>🌍 世界座標與照片紀錄 (雲端版)</h1>
 
-    <div class="control-panel">
+    <div class="toggle-btn-container">
+        <button id="togglePanelBtn" class="toggle-btn" onclick="toggleInputPanel()">➕ 新增紀錄</button>
+    </div>
+
+    <div class="control-panel hidden-panel" id="inputPanel">
         <input type="file" id="photoInput" accept="image/*" class="full-width">
         <input type="text" id="coordsInput" class="full-width" placeholder="貼上座標 (例: 25.0339, 121.5644 或帶有括號)">
         <select id="continentInput" class="full-width">
@@ -151,12 +191,12 @@
             <option value="大洋洲">大洋洲</option>
             <option value="南極洲">南極洲</option>
         </select>
-        <button id="submitBtn" onclick="addRecord()">新增紀錄到雲端</button>
+        <button id="submitBtn" class="submit-btn" onclick="addRecord()">上傳至雲端</button>
     </div>
 
     <div class="filter-section">
         <strong>🔍 依大洲尋找：</strong>
-        <select id="filterSelect" onchange="fetchAndRenderGallery()">
+        <select id="filterSelect" onchange="fetchAndRenderGallery()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
             <option value="全部">全部顯示</option>
             <option value="亞洲">亞洲</option>
             <option value="歐洲">歐洲</option>
@@ -178,13 +218,33 @@
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
 
-    // 【重大修正：修改變數名稱為 supabaseClient 以避免名稱衝突造成當機】
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 網頁載入完成後，自動從雲端抓取一次資料
+    // 網頁載入完成後自動抓取資料
     window.onload = function() {
         fetchAndRenderGallery();
     };
+
+    // --- 新增：切換輸入面板顯示/隱藏的功能 ---
+    function toggleInputPanel() {
+        const panel = document.getElementById('inputPanel');
+        const btn = document.getElementById('togglePanelBtn');
+        
+        if (panel.classList.contains('hidden-panel')) {
+            panel.classList.remove('hidden-panel');
+            btn.innerText = '✖ 關閉面板';
+            btn.style.backgroundColor = '#f0f0f0';
+            btn.style.borderColor = '#ccc';
+            btn.style.color = '#555';
+        } else {
+            panel.classList.add('hidden-panel');
+            btn.innerText = '➕ 新增紀錄';
+            btn.style.backgroundColor = 'transparent';
+            btn.style.borderColor = 'var(--primary)';
+            btn.style.color = 'var(--primary)';
+        }
+    }
+    // ----------------------------------------
 
     // 自動判斷大洲的功能
     let autoDetectTimer;
@@ -234,7 +294,7 @@
                         }, 3000);
                     }
                 } catch (err) {
-                    console.log('自動判斷地區失敗', err);
+                    console.log('自動定位失敗', err);
                 }
             }
         }, 800);
@@ -247,7 +307,6 @@
         gallery.innerHTML = '<div class="loading-text">雲端資料載入中...</div>';
 
         try {
-            // 使用修正後的 supabaseClient
             let query = supabaseClient.from('maps').select('*');
 
             if (filter !== '全部') {
@@ -289,7 +348,7 @@
 
         } catch (err) {
             console.error('讀取資料失敗:', err.message);
-            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認資料庫權限設定(RLS)已關閉。</div>';
+            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認資料庫權限。</div>';
         }
     }
 
@@ -324,7 +383,6 @@
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            // 使用修正後的 supabaseClient
             const { data: storageData, error: storageError } = await supabaseClient.storage
                 .from('photos')
                 .upload(fileName, file);
@@ -351,21 +409,29 @@
                 ]);
 
             if (dbError) throw dbError;
-
-            alert('成功上傳並保存至雲端！');
             
+            // 上傳成功後的動作
             photoInput.value = '';
             document.getElementById('coordsInput').value = '';
             document.getElementById('continentInput').selectedIndex = 0; 
 
+            // 自動收起新增面板
+            toggleInputPanel();
+            
+            // 重新讀取畫面
             fetchAndRenderGallery();
+
+            // 稍微延遲一下再顯示成功，體驗更好
+            setTimeout(() => {
+                alert('成功上傳並保存至雲端！');
+            }, 300);
 
         } catch (err) {
             console.error('上傳失敗:', err);
-            alert('上傳發生錯誤: ' + err.message + '\n\n請確認 Supabase 的 Storage / Database 權限是否已經開啟。');
+            alert('上傳發生錯誤: ' + err.message);
         } finally {
             submitBtn.disabled = false;
-            submitBtn.innerText = '新增紀錄到雲端';
+            submitBtn.innerText = '上傳至雲端';
         }
     }
 
