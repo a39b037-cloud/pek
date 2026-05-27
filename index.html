@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世界座標與照片紀錄 - 雲端共享版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --bg: #F5F7FA;
+            --card-bg: #FFFFFF;
+            --text: #333333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .control-panel {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            display: grid;
+            gap: 15px;
+            grid-template-columns: 1fr 1fr;
+        }
+        .control-panel select, .control-panel input, .control-panel button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .control-panel button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            grid-column: span 2;
+            transition: background 0.2s;
+        }
+        .control-panel button:hover {
+            background-color: #357ABD;
+        }
+        .control-panel button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .full-width {
+            grid-column: span 2;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .card-info {
+            padding: 15px;
+        }
+        .continent-tag {
+            display: inline-block;
+            background: #E1F0FF;
+            color: var(--primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .coordinate {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        .loading-text {
+            text-align: center;
+            grid-column: span 3;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🌍 世界座標與照片紀錄 (雲端版)</h1>
+
+    <div class="control-panel">
+        <input type="file" id="photoInput" accept="image/*" class="full-width">
+        <input type="text" id="latInput" placeholder="緯度 (例: 25.0339)">
+        <input type="text" id="lngInput" placeholder="經度 (例: 121.5644)">
+        <select id="continentInput" class="full-width">
+            <option value="" disabled selected>選擇大洲</option>
+            <option value="亞洲">亞洲</option>
+            <option value="歐洲">歐洲</option>
+            <option value="北美洲">北美洲</option>
+            <option value="南美洲">南美洲</option>
+            <option value="非洲">非洲</option>
+            <option value="大洋洲">大洋洲</option>
+            <option value="南極洲">南極洲</option>
+        </select>
+        <button id="submitBtn" onclick="addRecord()">新增紀錄到雲端</button>
+    </div>
+
+    <div class="filter-section">
+        <strong>🔍 依大洲尋找：</strong>
+        <select id="filterSelect" onchange="fetchAndRenderGallery()">
+            <option value="全部">全部顯示</option>
+            <option value="亞洲">亞洲</option>
+            <option value="歐洲">歐洲</option>
+            <option value="北美洲">北美洲</option>
+            <option value="南美洲">南美洲</option>
+            <option value="非洲">非洲</option>
+            <option value="大洋洲">大洋洲</option>
+            <option value="南極洲">南極洲</option>
+        </select>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+</div>
+
+<div class="toast" id="toast">座標已複製！</div>
+
+<script>
+    // 1. 設定你的 Supabase 憑證 (請至 Supabase -> Settings -> API 複製)
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    // 初始化 Supabase 用戶端
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 網頁載入完成後，自動從雲端抓取一次資料
+    window.onload = function() {
+        fetchAndRenderGallery();
+    };
+
+    // 核心功能：從雲端資料庫讀取資料並渲染畫面
+    async function fetchAndRenderGallery() {
+        const gallery = document.getElementById('gallery');
+        const filter = document.getElementById('filterSelect').value;
+        gallery.innerHTML = '<div class="loading-text">雲端資料載入中...</div>';
+
+        try {
+            // 開始向 Supabase 資料庫查詢
+            // 假設你在 Supabase 建立的資料表名稱叫做 'maps'
+            let query = supabase.from('maps').select('*');
+
+            // 如果有指定大洲，加上篩選條件
+            if (filter !== '全部') {
+                query = query.eq('continent', filter);
+            }
+
+            // 依照建立時間排序 (最新的在前面)
+            query = query.order('created_at', { ascending: false });
+
+            const { data, error } = await query;
+
+            if (error) throw error;
+
+            gallery.innerHTML = ''; // 清空加載中文字
+
+            if (!data || data.length === 0) {
+                gallery.innerHTML = '<div class="loading-text">目前沒有這區的紀錄。</div>';
+                return;
+            }
+
+            // 渲染卡片
+            data.forEach(record => {
+                const coordText = `${record.latitude}, ${record.longitude}`;
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <img src="${record.photo_url}" alt="Location Photo">
+                    <div class="card-info">
+                        <div class="continent-tag">${record.continent}</div>
+                        <div class="coordinate" data-coord="${coordText}">
+                            ${coordText}<br>
+                            <small style="font-size: 10px; color: #888;">(長按複製)</small>
+                        </div>
+                    </div>
+                `;
+                gallery.appendChild(card);
+
+                const coordElement = card.querySelector('.coordinate');
+                setupLongPress(coordElement, coordText);
+            });
+
+        } catch (err) {
+            console.error('讀取資料失敗:', err.message);
+            gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請檢查 API 設定或 RLS 權限。</div>';
+        }
+    }
+
+    // 核心功能：新增紀錄到雲端 (上傳圖片 + 寫入資料庫)
+    async function addRecord() {
+        const photoInput = document.getElementById('photoInput');
+        const lat = document.getElementById('latInput').value.trim();
+        const lng = document.getElementById('lngInput').value.trim();
+        const continent = document.getElementById('continentInput').value;
+        const submitBtn = document.getElementById('submitBtn');
+
+        if (!photoInput.files[0] || !lat || !lng || !continent) {
+            alert('請完整填寫所有欄位並選擇照片！');
+            return;
+        }
+
+        // 停用按鈕避免重複點擊
+        submitBtn.disabled = true;
+        submitBtn.innerText = '正在上傳照片到雲端...';
+
+        try {
+            const file = photoInput.files[0];
+            // 為了避免檔名重複覆蓋，使用時間戳當作新檔名
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}.${fileExt}`;
+
+            // 步驟一：上傳實體圖片到 Supabase Storage (儲存桶名稱需為 'photos')
+            const { data: storageData, error: storageError } = await supabase.storage
+                .from('photos')
+                .upload(fileName, file);
+
+            if (storageError) throw storageError;
+
+            // 步驟二：取得圖片的公開網路網址
+            const { data: urlData } = supabase.storage
+                .from('photos')
+                .getPublicUrl(fileName);
+            
+            const publicPhotoUrl = urlData.publicUrl;
+
+            submitBtn.innerText = '正在寫入資料庫...';
+
+            // 步驟三：將文字欄位與圖片網址一併寫入 Database 資料表 'maps'
+            const { error: dbError } = await supabase
+                .from('maps')
+                .insert([
+                    { 
+                        continent: continent, 
+                        latitude: parseFloat(lat), 
+                        longitude: parseFloat(lng), 
+                        photo_url: publicPhotoUrl 
+                    }
+                ]);
+
+            if (dbError) throw dbError;
+
+            alert('成功上傳並保存至雲端！');
+            
+            // 表單清空
+            photoInput.value = '';
+            document.getElementById('latInput').value = '';
+            document.getElementById('lngInput').value = '';
+            document.getElementById('continentInput').value = '';
+
+            // 重新刷新列表
+            fetchAndRenderGallery();
+
+        } catch (err) {
+            console.error('上傳失敗詳細資訊:', err);
+            alert('發生錯誤: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = '新增紀錄到雲端';
+        }
+    }
+
+    // 長按與複製邏輯 (保持與原本相同)
+    function setupLongPress(element, textToCopy) {
+        let pressTimer;
+        const duration = 600;
+
+        const startPress = (e) => {
+            if(e.type === 'mousedown' && e.button !== 0) return; 
+            pressTimer = setTimeout(() => { copyToClipboard(textToCopy); }, duration);
+        };
+
+        const cancelPress = () => {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        };
+
+        element.addEventListener('mousedown', startPress);
+        element.addEventListener('touchstart', startPress, {passive: true});
+        element.addEventListener('mouseup', cancelPress);
+        element.addEventListener('mouseleave', cancelPress);
+        element.addEventListener('touchend', cancelPress);
+        element.addEventListener('touchcancel', cancelPress);
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.opacity = '1'; }, 10);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => { toast.style.display = 'none'; }, 300);
+            }, 2000);
+        }).catch(err => {
+            alert('複製失敗，請手動複製。');
+        });
+    }
+</script>
+
+</body>
+</html>
