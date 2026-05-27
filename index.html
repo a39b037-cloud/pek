@@ -102,6 +102,7 @@
         }
         .gallery {
             display: grid;
+            /* 電腦版預設：自動填滿，每張最少 250px */
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 20px;
         }
@@ -145,7 +146,6 @@
             -webkit-touch-callout: none;
             transition: background 0.2s;
         }
-        /* 增加點擊時的回饋效果 */
         .coordinate:active {
             background: #e0e0e0;
         }
@@ -167,6 +167,35 @@
             text-align: center;
             grid-column: span 3;
             color: #888;
+        }
+
+        /* 📱 專屬手機版設定：當螢幕寬度小於 600px 時觸發 */
+        @media (max-width: 600px) {
+            .gallery {
+                /* 強制切換為一行 2 排 */
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px; /* 縮小卡片間距 */
+            }
+            .card img {
+                height: 140px; /* 縮小圖片高度，避免看起來太細長 */
+            }
+            .card-info {
+                padding: 10px;
+            }
+            .coordinate {
+                font-size: 11px; /* 稍微縮小座標字體，避免在小格中斷行破版 */
+                padding: 8px 4px;
+            }
+            .continent-tag {
+                font-size: 11px;
+                padding: 3px 6px;
+                margin-bottom: 8px;
+            }
+            /* 將篩選列稍微調整，讓手機上看起來更整齊 */
+            .filter-section {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
     </style>
 </head>
