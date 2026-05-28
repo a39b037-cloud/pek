@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>世界座標與照片紀錄 - 雲端共享版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <style>
         :root {
             --primary: #4A90E2;
@@ -119,6 +120,8 @@
             width: 100%;
             height: 250px;
             object-fit: cover;
+            /* 改善圖片尚未載入時的背景佔位 */
+            background-color: #eee;
         }
         .card-info {
             padding: 15px;
@@ -183,10 +186,8 @@
             grid-column: span 3;
             color: #888;
         }
-
-        /* --- 新增：回報視窗的樣式 --- */
         .modal-overlay {
-            display: none; /* 預設隱藏 */
+            display: none; 
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5);
@@ -203,47 +204,18 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             animation: fadeIn 0.2s ease;
         }
-        .modal-content h3 {
-            margin-top: 0;
-            color: var(--text);
-        }
+        .modal-content h3 { margin-top: 0; color: var(--text); }
         .modal-content textarea {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            min-height: 80px;
-            resize: vertical;
-            font-family: inherit;
+            width: 100%; box-sizing: border-box; padding: 10px;
+            border: 1px solid #ddd; border-radius: 6px; min-height: 80px; resize: vertical; font-family: inherit;
         }
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        .modal-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .cancel-btn {
-            background: #eee;
-            color: #555;
-        }
-        .submit-report-btn {
-            background: #e74c3c;
-            color: white;
-        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+        .modal-btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .cancel-btn { background: #eee; color: #555; }
+        .submit-report-btn { background: #e74c3c; color: white; }
 
         @media (max-width: 600px) {
-            .gallery {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
+            .gallery { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .card img { height: 140px; }
             .card-info { padding: 10px; }
             .coordinate { font-size: 11px; padding: 8px 4px; }
@@ -319,13 +291,9 @@
     const SUPABASE_URL = 'https://hixvrxzogxwjpzdirdwm.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_uaIm3GV4mn0dTiyixVx5kA_OXI1iTtA';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // 用來記錄當前被點擊報錯的資料 ID
     let currentReportId = null;
 
-    window.onload = function() {
-        fetchAndRenderGallery();
-    };
+    window.onload = function() { fetchAndRenderGallery(); };
 
     function toggleInputPanel() {
         const panel = document.getElementById('inputPanel');
@@ -345,7 +313,6 @@
         }
     }
 
-    // 自動判斷地區
     let autoDetectTimer;
     document.getElementById('coordsInput').addEventListener('input', function(e) {
         clearTimeout(autoDetectTimer);
@@ -406,9 +373,9 @@
                 const coordText = `${record.latitude}, ${record.longitude}`;
                 const card = document.createElement('div');
                 card.className = 'card';
-                // 修改處：加入卡片標頭 (card-header)，裡面包含地區標籤與報錯按鈕
+                // 🌟 新增 loading="lazy"：這會讓照片滑到才載入，大幅加快網頁開啟速度！
                 card.innerHTML = `
-                    <img src="${record.photo_url}" alt="Location Photo">
+                    <img src="${record.photo_url}" alt="Location Photo" loading="lazy">
                     <div class="card-info">
                         <div class="card-header">
                             <div class="continent-tag">${record.continent}</div>
@@ -448,19 +415,38 @@
         const lng = parseFloat(coordArray[1]);
 
         submitBtn.disabled = true;
-        submitBtn.innerText = '正在上傳...';
+        // 修改提示文字，讓使用者知道正在處理中
+        submitBtn.innerText = '📸 正在壓縮照片...'; 
 
         try {
-            const file = photoInput.files[0];
-            const fileExt = file.name.split('.').pop();
+            const originalFile = photoInput.files[0];
+            const fileExt = originalFile.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
 
-            const { data: storageData, error: storageError } = await supabaseClient.storage.from('photos').upload(fileName, file);
+            // 🌟 新增：圖片壓縮設定 (將照片壓縮到 500KB 以下，最大寬高 1200px)
+            const options = {
+                maxSizeMB: 0.5,
+                maxWidthOrHeight: 1200,
+                useWebWorker: true
+            };
+            
+            // 執行壓縮
+            let fileToUpload = originalFile;
+            try {
+                fileToUpload = await imageCompression(originalFile, options);
+            } catch (error) {
+                console.log('圖片壓縮失敗，改用原圖上傳', error);
+            }
+
+            submitBtn.innerText = '☁️ 正在上傳至雲端...';
+
+            const { data: storageData, error: storageError } = await supabaseClient.storage.from('photos').upload(fileName, fileToUpload);
             if (storageError) throw storageError;
 
             const { data: urlData } = supabaseClient.storage.from('photos').getPublicUrl(fileName);
             const publicPhotoUrl = urlData.publicUrl;
-            submitBtn.innerText = '寫入資料庫...';
+            
+            submitBtn.innerText = '💾 寫入資料庫...';
 
             const { error: dbError } = await supabaseClient.from('maps').insert([{ continent: continent, latitude: lat, longitude: lng, photo_url: publicPhotoUrl }]);
             if (dbError) throw dbError;
@@ -475,10 +461,9 @@
         }
     }
 
-    // --- 新增：報錯相關邏輯 ---
     function openReportModal(id) {
         currentReportId = id;
-        document.getElementById('reportReason').value = ''; // 清空輸入框
+        document.getElementById('reportReason').value = ''; 
         document.getElementById('reportModal').style.display = 'flex';
     }
 
@@ -490,30 +475,18 @@
     async function submitReport() {
         const reason = document.getElementById('reportReason').value.trim();
         const reportBtn = document.getElementById('submitReportBtn');
-
-        if (!reason) {
-            alert('請稍微描述一下錯誤情形！');
-            return;
-        }
-
-        reportBtn.disabled = true;
-        reportBtn.innerText = '送出中...';
-
+        if (!reason) { alert('請稍微描述一下錯誤情形！'); return; }
+        reportBtn.disabled = true; reportBtn.innerText = '送出中...';
         try {
-            const { error } = await supabaseClient
-                .from('reports')
-                .insert([{ target_id: currentReportId, reason: reason }]);
-
+            const { error } = await supabaseClient.from('reports').insert([{ target_id: currentReportId, reason: reason }]);
             if (error) throw error;
-
             alert('回報成功！感謝您的協助。');
             closeReportModal();
         } catch (err) {
             console.error('回報失敗:', err);
             alert('回報失敗，請確認資料庫 reports 資料表與權限已設定正確。');
         } finally {
-            reportBtn.disabled = false;
-            reportBtn.innerText = '送出回報';
+            reportBtn.disabled = false; reportBtn.innerText = '送出回報';
         }
     }
 
@@ -523,10 +496,7 @@
             toast.innerText = '座標已複製！';
             toast.style.display = 'block';
             setTimeout(() => { toast.style.opacity = '1'; }, 10);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => { toast.style.display = 'none'; }, 300);
-            }, 2000);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; }, 300); }, 2000);
         }).catch(err => { alert('複製失敗，請手動複製。'); });
     }
 </script>
