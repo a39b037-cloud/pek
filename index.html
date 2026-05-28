@@ -353,7 +353,7 @@
     async function fetchAndRenderGallery() {
         const gallery = document.getElementById('gallery');
         const filter = document.getElementById('filterSelect').value;
-        gallery.innerHTML = '<div class="loading-text">雲端資料載入中...</div>';
+        gallery.innerHTML = '<div class="loading-text">皮皮資料載入中...</div>';
 
         try {
             let query = supabaseClient.from('maps').select('*');
