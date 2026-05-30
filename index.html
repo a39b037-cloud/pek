@@ -356,7 +356,9 @@
         gallery.innerHTML = '<div class="loading-text">皮皮資料載入中...</div>';
 
         try {
-            let query = supabaseClient.from('maps').select('*');
+            //let query = supabaseClient.from('maps').select('*');
+            let query = supabaseClient.from('maps').select('*').limit(30);
+
             if (filter !== '全部') query = query.eq('continent', filter);
             query = query.order('created_at', { ascending: false });
 
