@@ -357,7 +357,7 @@
 
         try {
             //let query = supabaseClient.from('maps').select('*');
-            let query = supabaseClient.from('maps').select('*').limit(30);
+            let query = supabaseClient.from('maps').select('*');
 
             if (filter !== '全部') query = query.eq('continent', filter);
             query = query.order('created_at', { ascending: false });
