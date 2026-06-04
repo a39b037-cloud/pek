@@ -95,7 +95,7 @@
             margin-bottom: 20px;
             display: flex;
             align-items: center;
-            flex-wrap: wrap; /* 讓內容在小螢幕能自動換行 */
+            flex-wrap: wrap;
             gap: 10px;
             background: var(--card-bg);
             padding: 15px;
@@ -121,6 +121,8 @@
             width: 100%;
             height: 250px;
             object-fit: cover;
+            /* 🌟 關鍵修改：讓照片一律對齊頂部裁切，保留上方畫面 */
+            object-position: top; 
             background-color: #eee;
         }
         .card-info {
@@ -359,22 +361,18 @@
     async function fetchAndRenderGallery() {
         const gallery = document.getElementById('gallery');
         const filter = document.getElementById('filterSelect').value;
-        const sortMethod = document.getElementById('sortSelect').value; // 取得目前的排序選項
+        const sortMethod = document.getElementById('sortSelect').value;
 
         gallery.innerHTML = '<div class="loading-text">皮皮資料載入中...</div>';
 
         try {
             let query = supabaseClient.from('maps').select('*');
 
-            // 1. 處理地區篩選
             if (filter !== '全部') query = query.eq('continent', filter);
             
-            // 2. 處理排序方式
             if (sortMethod === 'time') {
-                // 預設：依上傳時間 (最新在最上面)
                 query = query.order('created_at', { ascending: false });
             } else if (sortMethod === 'coord') {
-                // 依座標：緯度由北到南 (數字大到小)，如果緯度一樣再排經度
                 query = query.order('latitude', { ascending: false }).order('longitude', { ascending: true });
             }
 
