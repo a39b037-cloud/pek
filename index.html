@@ -119,9 +119,9 @@
         }
         .card img {
             width: 100%;
-            height: 250px; /* 保持原本固定的高度，卡片尺寸完全不變 */
-            object-fit: contain; /* 🌟 關鍵修改：自動縮放完整顯示整張圖片，絕不裁切 */
-            background-color: #eee; /* 🌟 建議修改：將佔位背景改成深灰色（或黑色），這樣照片兩側留白時會有像電影院螢幕的質感，比較美觀 */
+            height: 250px; /* 保持原本整齊的高寬 */
+            object-fit: contain; /* 照片不裁切完整呈現 */
+            background-color: #eee; /* 留白底色改為質感深灰 */
         }
         .card-info {
             padding: 15px;
@@ -216,7 +216,7 @@
 
         @media (max-width: 600px) {
             .gallery { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .card img { height: 140px; }
+            .card img { height: 140px; } /* 手機版保持原本高度 */
             .card-info { padding: 10px; }
             .coordinate { font-size: 11px; padding: 8px 4px; }
             .continent-tag { font-size: 11px; padding: 3px 6px; }
@@ -294,12 +294,25 @@
 </div>
 
 <script>
+    // ⚠️ 貼心提醒：搬到新專案後，別忘了把下面這兩行改成新專案的金鑰唷！
     const SUPABASE_URL = 'https://ciptzjjzrohkoycgsdmr.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let currentReportId = null;
 
-    window.onload = function() { fetchAndRenderGallery(); };
+    window.onload = function() { 
+        fetchAndRenderGallery(); 
+        trackVisitQuietly(); // 🌟 啟動悄悄記錄瀏覽量
+    };
+
+    // 🌟 新增：悄悄記錄瀏覽量的函式
+    async function trackVisitQuietly() {
+        try {
+            await supabaseClient.from('visits').insert([{}]);
+        } catch (err) {
+            console.log('流量記錄失敗', err);
+        }
+    }
 
     function toggleInputPanel() {
         const panel = document.getElementById('inputPanel');
@@ -471,6 +484,7 @@
         }
     }
 
+    // 報錯相關邏輯
     function openReportModal(id) {
         currentReportId = id;
         document.getElementById('reportReason').value = ''; 
