@@ -21,7 +21,7 @@
             --bg: #F5F7FA;
             --card-bg: #FFFFFF;
             --text: #333333;
-            --sponsor-green: #3da272; /* 💡 復刻 image_52e9a1.jpg 的超質感綠色 */
+            --sponsor-green: #3da272;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -58,7 +58,6 @@
             color: white;
             transform: translateY(-2px);
         }
-        /* 🌟 上方贊助按鈕樣式 */
         .sponsor-btn {
             background-color: var(--sponsor-green);
             color: white;
@@ -181,6 +180,17 @@
             cursor: default;
             user-select: none;
             -webkit-user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 🌟 設定金盆小圖示的大小，使其與文字完美對齊 */
+        .card-marker img.gold-pot-icon {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            vertical-align: middle;
+            background: none;
         }
         .report-btn {
             background: none;
@@ -256,7 +266,6 @@
         .cancel-btn { background: #eee; color: #555; }
         .submit-report-btn { background: #e74c3c; color: white; }
 
-        /* 底部精緻贊助區塊的樣式 */
         .footer-sponsor-box {
             text-align: center;
             margin-top: 50px;
@@ -312,9 +321,11 @@
             <option value="大洋洲">大洋洲</option>
             <option value="南極洲">南極洲</option>
         </select>
+        
         <select id="markerInput" class="full-width">
             <option value="🍄" selected>標記圖案：🍄 蘑菇 (預設)</option>
             <option value="🌸">標記圖案：🌸 花朵</option>
+            <option value="POT">標記圖案：🌱 金盆</option>
         </select>
         
         <div style="grid-column: span 2; display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 5px 0;">
@@ -346,6 +357,7 @@
             <option value="全部">全部顯示</option>
             <option value="🍄">🍄 蘑菇</option>
             <option value="🌸">🌸 花朵</option>
+            <option value="POT">🌱 金盆</option>
         </select>
 
         <strong style="margin-left: 10px;">⇅ 排序：</strong>
@@ -381,6 +393,10 @@
     const SUPABASE_URL = 'https://ciptzjjzrohkoycgsdmr.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // 🌟 請將這裏的網址替換為你將圖片上傳至 Supabase Storage 後取得的公開圖片網址
+    const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
+
     let currentReportId = null;
 
     window.onload = function() { 
@@ -454,7 +470,7 @@
     async function fetchAndRenderGallery() {
         const gallery = document.getElementById('gallery');
         const filter = document.getElementById('filterSelect').value;
-        const markerFilter = document.getElementById('markerFilterSelect').value; // 💡 抓取標記篩選值
+        const markerFilter = document.getElementById('markerFilterSelect').value; 
         const sortMethod = document.getElementById('sortSelect').value;
 
         gallery.innerHTML = '<div class="loading-text">皮皮資料載入中...</div>';
@@ -462,13 +478,9 @@
         try {
             let query = supabaseClient.from('maps').select('*');
             
-            // 篩選地區
             if (filter !== '全部') query = query.eq('continent', filter);
-            
-            // 💡 篩選標記 (新增香菇、花朵的多重邏輯判斷)
             if (markerFilter !== '全部') query = query.eq('marker', markerFilter);
 
-            // 排序邏輯
             if (sortMethod === 'time') {
                 query = query.order('created_at', { ascending: false });
             } else if (sortMethod === 'coord') {
@@ -488,7 +500,12 @@
                 const coordText = `${record.latitude}, ${record.longitude}`;
                 const card = document.createElement('div');
                 card.className = 'card';
-                const currentMarker = record.marker || '🍄';
+
+                // 🌟 判斷標記：若是 POT 或 🪴 則渲染自訂圖片，否則顯示 Emoji
+                let markerHTML = record.marker || '🍄';
+                if (record.marker === 'POT' || record.marker === '🪴') {
+                    markerHTML = `<img src="${GOLD_POT_IMG_URL}" class="gold-pot-icon" alt="金盆">`;
+                }
 
                 const isOld = record.is_old === 'old';
                 const oldTagHTML = isOld ? `<div style="position: absolute; top: 10px; left: 10px; background: #e67e22; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">⏳ 絕版舊圖</div>` : '';
@@ -502,7 +519,7 @@
                     <div class="card-info">
                         <div class="card-header">
                             <div class="continent-tag">${record.continent}</div>
-                            <div class="card-marker">${currentMarker}</div>
+                            <div class="card-marker">${markerHTML}</div>
                             <button class="report-btn" onclick="openReportModal(${record.id})">⚠️ 報錯</button>
                         </div>
                         <div class="coordinate" onclick="copyToClipboard('${coordText}')">
