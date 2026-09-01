@@ -184,7 +184,6 @@
             align-items: center;
             justify-content: center;
         }
-        /* 🌟 設定金盆小圖示的大小，使其與文字完美對齊 */
         .card-marker img.gold-pot-icon {
             width: 20px;
             height: 20px;
@@ -328,6 +327,9 @@
             <option value="POT">標記圖案：🌱 金盆</option>
         </select>
         
+        <!-- 🌟 新增：活動日期與備註輸入框 -->
+        <input type="text" id="remarkInput" class="full-width" placeholder="活動日期或備註 (選填，例如：9/1~9/30)">
+
         <div style="grid-column: span 2; display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 5px 0;">
             <input type="checkbox" id="isOldInput" style="width: 18px; height: 18px; cursor: pointer;">
             <label for="isOldInput" style="cursor: pointer; font-weight: bold; color: #e67e22;">此照片已被官方替換（標記為絕版舊圖）</label>
@@ -394,7 +396,6 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    // 🌟 請將這裏的網址替換為你將圖片上傳至 Supabase Storage 後取得的公開圖片網址
     const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
 
     let currentReportId = null;
@@ -501,7 +502,6 @@
                 const card = document.createElement('div');
                 card.className = 'card';
 
-                // 🌟 判斷標記：若是 POT 或 🪴 則渲染自訂圖片，否則顯示 Emoji
                 let markerHTML = record.marker || '🍄';
                 if (record.marker === 'POT' || record.marker === '🪴') {
                     markerHTML = `<img src="${GOLD_POT_IMG_URL}" class="gold-pot-icon" alt="金盆">`;
@@ -510,6 +510,9 @@
                 const isOld = record.is_old === 'old';
                 const oldTagHTML = isOld ? `<div style="position: absolute; top: 10px; left: 10px; background: #e67e22; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">⏳ 絕版舊圖</div>` : '';
                 const imgStyle = isOld ? 'style="filter: brightness(0.9);"' : '';
+
+                // 🌟 動態生成：如果有填寫備註，就產生一個精美的橘色備註條
+                const remarkHTML = record.remark ? `<div style="margin-top: 8px; font-size: 12px; color: #e67e22; background: #fff3e0; padding: 5px; border-radius: 6px; text-align: center; font-weight: bold;">🗓️ ${record.remark}</div>` : '';
 
                 card.style.position = 'relative';
 
@@ -526,6 +529,7 @@
                             ${coordText}<br>
                             <small style="font-size: 10px; color: #888;">(點擊複製)</small>
                         </div>
+                        ${remarkHTML}
                     </div>
                 `;
                 gallery.appendChild(card);
@@ -541,6 +545,7 @@
         const coordsInput = document.getElementById('coordsInput').value.trim();
         const continent = document.getElementById('continentInput').value;
         const marker = document.getElementById('markerInput').value; 
+        const remarkInput = document.getElementById('remarkInput').value.trim(); // 🌟 抓取填寫的備註
         const isOldInput = document.getElementById('isOldInput').checked; 
         const submitBtn = document.getElementById('submitBtn');
 
@@ -592,14 +597,17 @@
                 longitude: lng, 
                 photo_url: publicPhotoUrl,
                 marker: marker,
+                remark: remarkInput, // 🌟 寫入備註至資料庫
                 is_old: isOldInput ? 'old' : 'new' 
             }]);
             if (dbError) throw dbError;
             
+            // 🌟 成功後清空所有輸入框
             photoInput.value = ''; 
             document.getElementById('coordsInput').value = ''; 
             document.getElementById('continentInput').selectedIndex = 0; 
             document.getElementById('markerInput').value = '🍄'; 
+            document.getElementById('remarkInput').value = ''; 
             document.getElementById('isOldInput').checked = false; 
             
             toggleInputPanel(); 
