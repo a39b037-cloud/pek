@@ -22,6 +22,7 @@
             --card-bg: #FFFFFF;
             --text: #333333;
             --sponsor-green: #3da272;
+            --gold-accent: #d4a017;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -57,6 +58,30 @@
             background-color: var(--primary);
             color: white;
             transform: translateY(-2px);
+        }
+        .gold-list-btn {
+            background-color: #fff8e7;
+            color: #b8860b;
+            border: 2px solid #daa520;
+            padding: 10px 22px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .gold-list-btn:hover {
+            background-color: #daa520;
+            color: white;
+            transform: translateY(-2px);
+        }
+        .gold-list-btn img {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
         }
         .sponsor-btn {
             background-color: var(--sponsor-green);
@@ -184,13 +209,6 @@
             align-items: center;
             justify-content: center;
         }
-        .card-marker img.gold-pot-icon {
-            width: 20px;
-            height: 20px;
-            object-fit: contain;
-            vertical-align: middle;
-            background: none;
-        }
         .report-btn {
             background: none;
             border: none;
@@ -230,13 +248,14 @@
             display: none;
             opacity: 0;
             transition: opacity 0.3s;
-            z-index: 1000;
+            z-index: 3000;
         }
         .loading-text {
             text-align: center;
             grid-column: span 3;
             color: #888;
         }
+
         .modal-overlay {
             display: none; 
             position: fixed;
@@ -265,6 +284,113 @@
         .cancel-btn { background: #eee; color: #555; }
         .submit-report-btn { background: #e74c3c; color: white; }
 
+        .gold-modal-content {
+            background: white;
+            padding: 22px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 580px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            animation: fadeIn 0.2s ease;
+        }
+        .gold-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #fff3cd;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .gold-modal-header h3 {
+            margin: 0;
+            color: #b8860b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 20px;
+        }
+        .close-icon-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #888;
+            padding: 4px 8px;
+        }
+        .gold-list-scroll {
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 4px;
+        }
+        .gold-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fffdf5;
+            border: 1px solid #fae8a4;
+            border-radius: 10px;
+            padding: 10px 12px;
+            gap: 12px;
+        }
+        .gold-item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        .gold-item-thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #eee;
+            flex-shrink: 0;
+        }
+        .gold-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+        .gold-item-region {
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--primary);
+            background: #e1f0ff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            align-self: flex-start;
+        }
+        .gold-item-remark {
+            font-size: 12px;
+            color: #d35400;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .gold-copy-btn {
+            background: #daa520;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .gold-copy-btn:hover {
+            background: #b8860b;
+        }
+
         .footer-sponsor-box {
             text-align: center;
             margin-top: 50px;
@@ -290,7 +416,7 @@
             .card-marker { font-size: 14px; } 
             .report-btn { font-size: 11px; }
             .filter-section { flex-direction: column; align-items: stretch; }
-            .toggle-btn, .sponsor-btn { width: 100%; justify-content: center; box-sizing: border-box; }
+            .toggle-btn, .sponsor-btn, .gold-list-btn { width: 100%; justify-content: center; box-sizing: border-box; }
         }
     </style>
 </head>
@@ -301,6 +427,9 @@
 
     <div class="toggle-btn-container">
         <button id="togglePanelBtn" class="toggle-btn" onclick="toggleInputPanel()">➕ 新增紀錄</button>
+        <button class="gold-list-btn" onclick="openGoldPotModal()">
+            <img src="https://i.urusai.cc/6PYuy.jpg" alt="金盆"> 金盆清單
+        </button>
         <a href="https://ko-fi.com/a39b037" target="_blank" class="sponsor-btn">☕ 贊助支持</a>
     </div>
 
@@ -324,10 +453,9 @@
         <select id="markerInput" class="full-width">
             <option value="🍄" selected>標記圖案：🍄 蘑菇 (預設)</option>
             <option value="🌸">標記圖案：🌸 花朵</option>
-            <option value="POT">標記圖案：🌱 金盆</option>
+            <option value="POT">標記圖案：🌱 金盆 (加入金盆清單)</option>
         </select>
         
-        <!-- 🌟 新增：活動日期與備註輸入框 -->
         <input type="text" id="remarkInput" class="full-width" placeholder="活動日期或備註 (選填，例如：9/1~9/30)">
 
         <div style="grid-column: span 2; display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 5px 0;">
@@ -354,12 +482,12 @@
             <option value="南極洲">南極洲</option>
         </select>
 
+        <!-- 🌟 主牆標記篩選：只留香菇與花朵 -->
         <strong style="margin-left: 10px;">🏷️ 依標記：</strong>
         <select id="markerFilterSelect" onchange="fetchAndRenderGallery()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
-            <option value="全部">全部顯示</option>
+            <option value="全部">全部 (蘑菇+花朵)</option>
             <option value="🍄">🍄 蘑菇</option>
             <option value="🌸">🌸 花朵</option>
-            <option value="POT">🌱 金盆</option>
         </select>
 
         <strong style="margin-left: 10px;">⇅ 排序：</strong>
@@ -391,12 +519,22 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="goldPotModal" onclick="handleGoldModalOverlayClick(event)">
+    <div class="gold-modal-content">
+        <div class="gold-modal-header">
+            <h3><img src="https://i.urusai.cc/6PYuy.jpg" style="width:24px;height:24px;object-fit:contain;" alt="金盆"> 金盆活動座標清單</h3>
+            <button class="close-icon-btn" onclick="closeGoldPotModal()">✖</button>
+        </div>
+        <div class="gold-list-scroll" id="goldListContainer">
+            <div style="text-align: center; color: #888; padding: 20px;">載入中...</div>
+        </div>
+    </div>
+</div>
+
 <script>
     const SUPABASE_URL = 'https://ciptzjjzrohkoycgsdmr.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
-    const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
 
     let currentReportId = null;
 
@@ -480,7 +618,13 @@
             let query = supabaseClient.from('maps').select('*');
             
             if (filter !== '全部') query = query.eq('continent', filter);
-            if (markerFilter !== '全部') query = query.eq('marker', markerFilter);
+            
+            // 🌟 核心過濾：主牆排除金盆（POT 與 🪴），只顯示蘑菇或花朵
+            if (markerFilter === '全部') {
+                query = query.not('marker', 'in', '("POT","🪴")');
+            } else {
+                query = query.eq('marker', markerFilter);
+            }
 
             if (sortMethod === 'time') {
                 query = query.order('created_at', { ascending: false });
@@ -502,17 +646,10 @@
                 const card = document.createElement('div');
                 card.className = 'card';
 
-                let markerHTML = record.marker || '🍄';
-                if (record.marker === 'POT' || record.marker === '🪴') {
-                    markerHTML = `<img src="${GOLD_POT_IMG_URL}" class="gold-pot-icon" alt="金盆">`;
-                }
-
+                const currentMarker = record.marker || '🍄';
                 const isOld = record.is_old === 'old';
                 const oldTagHTML = isOld ? `<div style="position: absolute; top: 10px; left: 10px; background: #e67e22; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">⏳ 絕版舊圖</div>` : '';
                 const imgStyle = isOld ? 'style="filter: brightness(0.9);"' : '';
-
-                // 🌟 動態生成：如果有填寫備註，就產生一個精美的橘色備註條
-                const remarkHTML = record.remark ? `<div style="margin-top: 8px; font-size: 12px; color: #e67e22; background: #fff3e0; padding: 5px; border-radius: 6px; text-align: center; font-weight: bold;">🗓️ ${record.remark}</div>` : '';
 
                 card.style.position = 'relative';
 
@@ -522,14 +659,13 @@
                     <div class="card-info">
                         <div class="card-header">
                             <div class="continent-tag">${record.continent}</div>
-                            <div class="card-marker">${markerHTML}</div>
+                            <div class="card-marker">${currentMarker}</div>
                             <button class="report-btn" onclick="openReportModal(${record.id})">⚠️ 報錯</button>
                         </div>
                         <div class="coordinate" onclick="copyToClipboard('${coordText}')">
                             ${coordText}<br>
                             <small style="font-size: 10px; color: #888;">(點擊複製)</small>
                         </div>
-                        ${remarkHTML}
                     </div>
                 `;
                 gallery.appendChild(card);
@@ -545,7 +681,7 @@
         const coordsInput = document.getElementById('coordsInput').value.trim();
         const continent = document.getElementById('continentInput').value;
         const marker = document.getElementById('markerInput').value; 
-        const remarkInput = document.getElementById('remarkInput').value.trim(); // 🌟 抓取填寫的備註
+        const remarkInput = document.getElementById('remarkInput').value.trim(); 
         const isOldInput = document.getElementById('isOldInput').checked; 
         const submitBtn = document.getElementById('submitBtn');
 
@@ -597,12 +733,11 @@
                 longitude: lng, 
                 photo_url: publicPhotoUrl,
                 marker: marker,
-                remark: remarkInput, // 🌟 寫入備註至資料庫
+                remark: remarkInput, 
                 is_old: isOldInput ? 'old' : 'new' 
             }]);
             if (dbError) throw dbError;
             
-            // 🌟 成功後清空所有輸入框
             photoInput.value = ''; 
             document.getElementById('coordsInput').value = ''; 
             document.getElementById('continentInput').selectedIndex = 0; 
@@ -617,6 +752,66 @@
             alert('上傳發生錯誤: ' + err.message);
         } finally {
             submitBtn.disabled = false; submitBtn.innerText = '上傳至雲端';
+        }
+    }
+
+    async function openGoldPotModal() {
+        const modal = document.getElementById('goldPotModal');
+        const container = document.getElementById('goldListContainer');
+        modal.style.display = 'flex';
+        container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">載入金盆清單中...</div>';
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('maps')
+                .select('*')
+                .in('marker', ['POT', '🪴'])
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">目前尚無登錄的金盆紀錄。</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            data.forEach(item => {
+                const coord = `${item.latitude}, ${item.longitude}`;
+                const remarkText = item.remark ? `🗓️ ${item.remark}` : '無日期備註';
+                const isOldBadge = item.is_old === 'old' ? '<span style="font-size:10px;background:#e67e22;color:white;padding:1px 5px;border-radius:4px;margin-left:4px;">絕版</span>' : '';
+
+                const row = document.createElement('div');
+                row.className = 'gold-item';
+                row.innerHTML = `
+                    <div class="gold-item-left">
+                        <img src="${item.photo_url}" class="gold-item-thumb" alt="金盆地點" loading="lazy">
+                        <div class="gold-item-info">
+                            <div>
+                                <span class="gold-item-region">${item.continent}</span>
+                                ${isOldBadge}
+                            </div>
+                            <div class="gold-item-remark" title="${item.remark || ''}">${remarkText}</div>
+                            <div style="font-size: 11px; color: #888; font-family: monospace;">${coord}</div>
+                        </div>
+                    </div>
+                    <button class="gold-copy-btn" onclick="copyToClipboard('${coord}')">複製座標</button>
+                `;
+                container.appendChild(row);
+            });
+        } catch (err) {
+            console.error('讀取金盆清單失敗:', err);
+            container.innerHTML = '<div style="text-align: center; color: red; padding: 20px;">讀取失敗，請確認連線。</div>';
+        }
+    }
+
+    function closeGoldPotModal() {
+        document.getElementById('goldPotModal').style.display = 'none';
+    }
+
+    function handleGoldModalOverlayClick(e) {
+        if (e.target.id === 'goldPotModal') {
+            closeGoldPotModal();
         }
     }
 
