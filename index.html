@@ -526,7 +526,7 @@
 
 <div class="toast" id="toast">座標已複製！</div>
 
-<!-- 錯誤回報彈窗：拉高 z-index 至 3500，確保能蓋過金盆清單 -->
+<!-- 錯誤回報彈窗 -->
 <div class="modal-overlay" id="reportModal" style="z-index: 3500;">
     <div class="modal-content">
         <h3>⚠️ 錯誤回報</h3>
@@ -556,6 +556,9 @@
     const SUPABASE_URL = 'https://ciptzjjzrohkoycgsdmr.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 金盆預設圖片網址
+    const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
 
     let currentReportId = null;
 
@@ -640,6 +643,7 @@
             
             if (filter !== '全部') query = query.eq('continent', filter);
             
+            // 主牆排除金盆
             if (markerFilter === '全部') {
                 query = query.not('marker', 'in', '("POT","🪴")');
             } else {
@@ -696,7 +700,7 @@
         }
     }
 
-   async function addRecord() {
+    async function addRecord() {
         const photoInput = document.getElementById('photoInput');
         const coordsInput = document.getElementById('coordsInput').value.trim();
         const continent = document.getElementById('continentInput').value;
@@ -705,7 +709,6 @@
         const isOldInput = document.getElementById('isOldInput').checked; 
         const submitBtn = document.getElementById('submitBtn');
 
-        // 🌟 金盆（POT）允許不傳照片；其餘標記仍維持必填照片
         const hasPhoto = photoInput.files && photoInput.files[0];
         if (marker !== 'POT' && !hasPhoto) {
             alert('蘑菇與花朵紀錄請務必上傳照片！'); 
@@ -730,9 +733,8 @@
         submitBtn.disabled = true;
 
         try {
-            let publicPhotoUrl = GOLD_POT_IMG_URL; // 預設使用金盆代表圖
+            let publicPhotoUrl = GOLD_POT_IMG_URL;
 
-            // 如果有選擇照片，則執行壓縮與上傳
             if (hasPhoto) {
                 submitBtn.innerText = '📸 正在壓縮照片...'; 
                 const originalFile = photoInput.files[0];
