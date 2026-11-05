@@ -248,7 +248,7 @@
             display: none;
             opacity: 0;
             transition: opacity 0.3s;
-            z-index: 3000;
+            z-index: 5000;
         }
         .loading-text {
             text-align: center;
@@ -375,11 +375,18 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .gold-item-actions {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            flex-shrink: 0;
+        }
         .gold-copy-btn {
             background: #daa520;
             color: white;
             border: none;
-            padding: 8px 12px;
+            padding: 6px 12px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: bold;
@@ -389,6 +396,19 @@
         }
         .gold-copy-btn:hover {
             background: #b8860b;
+        }
+        .gold-report-link {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+        .gold-report-link:hover {
+            color: #e74c3c;
         }
 
         .footer-sponsor-box {
@@ -482,7 +502,6 @@
             <option value="南極洲">南極洲</option>
         </select>
 
-        <!-- 🌟 主牆標記篩選：只留香菇與花朵 -->
         <strong style="margin-left: 10px;">🏷️ 依標記：</strong>
         <select id="markerFilterSelect" onchange="fetchAndRenderGallery()" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd;">
             <option value="全部">全部 (蘑菇+花朵)</option>
@@ -507,7 +526,8 @@
 
 <div class="toast" id="toast">座標已複製！</div>
 
-<div class="modal-overlay" id="reportModal">
+<!-- 錯誤回報彈窗：拉高 z-index 至 3500，確保能蓋過金盆清單 -->
+<div class="modal-overlay" id="reportModal" style="z-index: 3500;">
     <div class="modal-content">
         <h3>⚠️ 錯誤回報</h3>
         <p style="font-size: 14px; color: #666; margin-bottom: 5px;">請簡述這筆紀錄的問題。</p>
@@ -519,6 +539,7 @@
     </div>
 </div>
 
+<!-- 金盆清單彈窗 -->
 <div class="modal-overlay" id="goldPotModal" onclick="handleGoldModalOverlayClick(event)">
     <div class="gold-modal-content">
         <div class="gold-modal-header">
@@ -619,7 +640,6 @@
             
             if (filter !== '全部') query = query.eq('continent', filter);
             
-            // 🌟 核心過濾：主牆排除金盆（POT 與 🪴），只顯示蘑菇或花朵
             if (markerFilter === '全部') {
                 query = query.not('marker', 'in', '("POT","🪴")');
             } else {
@@ -795,7 +815,10 @@
                             <div style="font-size: 11px; color: #888; font-family: monospace;">${coord}</div>
                         </div>
                     </div>
-                    <button class="gold-copy-btn" onclick="copyToClipboard('${coord}')">複製座標</button>
+                    <div class="gold-item-actions">
+                        <button class="gold-copy-btn" onclick="copyToClipboard('${coord}')">複製座標</button>
+                        <button class="gold-report-link" onclick="openReportModal(${item.id})">⚠️ 報錯</button>
+                    </div>
                 `;
                 container.appendChild(row);
             });
