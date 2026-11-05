@@ -696,7 +696,7 @@
         }
     }
 
-    async function addRecord() {
+   async function addRecord() {
         const photoInput = document.getElementById('photoInput');
         const coordsInput = document.getElementById('coordsInput').value.trim();
         const continent = document.getElementById('continentInput').value;
@@ -705,46 +705,60 @@
         const isOldInput = document.getElementById('isOldInput').checked; 
         const submitBtn = document.getElementById('submitBtn');
 
-        if (!photoInput.files[0] || !coordsInput || !continent) {
-            alert('請選擇照片、貼上座標並確認地區已被選取！'); return;
+        // 🌟 金盆（POT）允許不傳照片；其餘標記仍維持必填照片
+        const hasPhoto = photoInput.files && photoInput.files[0];
+        if (marker !== 'POT' && !hasPhoto) {
+            alert('蘑菇與花朵紀錄請務必上傳照片！'); 
+            return;
+        }
+
+        if (!coordsInput || !continent) {
+            alert('請貼上座標並確認地區已被選取！'); 
+            return;
         }
 
         let cleanCoords = coordsInput.replace(/[\(\)\[\]\s]/g, ''); 
         let coordArray = cleanCoords.split(',');
         if (coordArray.length !== 2 || isNaN(coordArray[0]) || isNaN(coordArray[1])) {
-            alert('座標格式不正確！請確認是否為「緯度,經度」'); return;
+            alert('座標格式不正確！請確認是否為「緯度,經度」'); 
+            return;
         }
 
         const lat = parseFloat(coordArray[0]);
         const lng = parseFloat(coordArray[1]);
 
         submitBtn.disabled = true;
-        submitBtn.innerText = '📸 正在壓縮照片...'; 
 
         try {
-            const originalFile = photoInput.files[0];
-            const fileExt = originalFile.name.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
+            let publicPhotoUrl = GOLD_POT_IMG_URL; // 預設使用金盆代表圖
 
-            const options = {
-                maxSizeMB: 0.5,
-                maxWidthOrHeight: 1200,
-                useWebWorker: true
-            };
-            
-            let fileToUpload = originalFile;
-            try {
-                fileToUpload = await imageCompression(originalFile, options);
-            } catch (error) {
-                console.log('圖片壓縮失敗，改用原圖上傳', error);
+            // 如果有選擇照片，則執行壓縮與上傳
+            if (hasPhoto) {
+                submitBtn.innerText = '📸 正在壓縮照片...'; 
+                const originalFile = photoInput.files[0];
+                const fileExt = originalFile.name.split('.').pop();
+                const fileName = `${Date.now()}.${fileExt}`;
+
+                const options = {
+                    maxSizeMB: 0.5,
+                    maxWidthOrHeight: 1200,
+                    useWebWorker: true
+                };
+                
+                let fileToUpload = originalFile;
+                try {
+                    fileToUpload = await imageCompression(originalFile, options);
+                } catch (error) {
+                    console.log('圖片壓縮失敗，改用原圖上傳', error);
+                }
+
+                submitBtn.innerText = '☁️ 正在上傳至雲端...';
+                const { data: storageData, error: storageError } = await supabaseClient.storage.from('photos').upload(fileName, fileToUpload);
+                if (storageError) throw storageError;
+
+                const { data: urlData } = supabaseClient.storage.from('photos').getPublicUrl(fileName);
+                publicPhotoUrl = urlData.publicUrl;
             }
-
-            submitBtn.innerText = '☁️ 正在上傳至雲端...';
-            const { data: storageData, error: storageError } = await supabaseClient.storage.from('photos').upload(fileName, fileToUpload);
-            if (storageError) throw storageError;
-
-            const { data: urlData } = supabaseClient.storage.from('photos').getPublicUrl(fileName);
-            const publicPhotoUrl = urlData.publicUrl;
             
             submitBtn.innerText = '💾 寫入資料庫...';
             const { error: dbError } = await supabaseClient.from('maps').insert([{ 
@@ -771,7 +785,8 @@
         } catch (err) {
             alert('上傳發生錯誤: ' + err.message);
         } finally {
-            submitBtn.disabled = false; submitBtn.innerText = '上傳至雲端';
+            submitBtn.disabled = false; 
+            submitBtn.innerText = '上傳至雲端';
         }
     }
 
