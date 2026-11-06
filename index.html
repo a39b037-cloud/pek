@@ -23,6 +23,9 @@
             --text: #333333;
             --sponsor-green: #3da272;
             --gold-accent: #d4a017;
+            --copied-bg: #e8f5e9;
+            --copied-border: #81c784;
+            --copied-text: #2e7d32;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -103,6 +106,22 @@
             color: var(--sponsor-green);
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(61, 162, 114, 0.25);
+        }
+        .clear-copied-btn {
+            background: #fff;
+            color: #777;
+            border: 1px solid #ddd;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: auto;
+        }
+        .clear-copied-btn:hover {
+            color: #e74c3c;
+            border-color: #e74c3c;
+            background: #fff5f5;
         }
         .hidden-panel {
             display: none !important;
@@ -231,10 +250,18 @@
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            border: 1px solid transparent;
         }
         .coordinate:active {
             background: #e0e0e0;
+        }
+        /* 已複製過的樣式 */
+        .coordinate.is-copied {
+            background: var(--copied-bg);
+            border-color: var(--copied-border);
+            color: var(--copied-text);
+            font-weight: 500;
         }
         .toast {
             position: fixed;
@@ -392,10 +419,15 @@
             font-weight: bold;
             cursor: pointer;
             white-space: nowrap;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .gold-copy-btn:hover {
             background: #b8860b;
+        }
+        .gold-copy-btn.is-copied {
+            background: var(--copied-bg);
+            color: var(--copied-text);
+            border: 1px solid var(--copied-border);
         }
         .gold-report-link {
             background: none;
@@ -436,7 +468,7 @@
             .card-marker { font-size: 14px; } 
             .report-btn { font-size: 11px; }
             .filter-section { flex-direction: column; align-items: stretch; }
-            .toggle-btn, .sponsor-btn, .gold-list-btn { width: 100%; justify-content: center; box-sizing: border-box; }
+            .toggle-btn, .sponsor-btn, .gold-list-btn, .clear-copied-btn { width: 100%; justify-content: center; box-sizing: border-box; }
         }
     </style>
 </head>
@@ -514,6 +546,9 @@
             <option value="time">依時間 (最新上傳)</option>
             <option value="coord">依座標 (緯度北到南)</option>
         </select>
+
+        <!-- 🌟 新增：清除已複製記號按鈕 -->
+        <button class="clear-copied-btn" onclick="clearCopiedHistory()">🧹 清除複製記號</button>
     </div>
 
     <div class="gallery" id="gallery"></div>
@@ -557,10 +592,51 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_QzhsNYmLcQaX_GRdQqnRkw_iV6a0HpG';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 金盆預設圖片網址
     const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
+    const COPIED_STORAGE_KEY = 'pikmin_copied_coords_v1';
 
     let currentReportId = null;
+
+    /* 讀取與儲存複製紀錄 */
+    function getCopiedCoords() {
+        try {
+            return JSON.parse(localStorage.getItem(COPIED_STORAGE_KEY)) || [];
+        } catch {
+            return [];
+        }
+    }
+
+    function isCoordCopied(coord) {
+        return getCopiedCoords().includes(coord.trim());
+    }
+
+    function markCoordAsCopied(coord) {
+        const cleaned = coord.trim();
+        const list = getCopiedCoords();
+        if (!list.includes(cleaned)) {
+            list.push(cleaned);
+            localStorage.setItem(COPIED_STORAGE_KEY, JSON.stringify(list));
+        }
+    }
+
+    /* 清除所有已複製紀錄 */
+    function clearCopiedHistory() {
+        const count = getCopiedCoords().length;
+        if (count === 0) {
+            showToast('目前沒有任何已複製的紀錄喔！');
+            return;
+        }
+        if (confirm(`確定要清除這 ${count} 筆「已複製」的標記嗎？`)) {
+            localStorage.removeItem(COPIED_STORAGE_KEY);
+            fetchAndRenderGallery();
+            // 如果金盆清單正好開著，一併重新整理
+            const goldModal = document.getElementById('goldPotModal');
+            if (goldModal.style.display === 'flex') {
+                openGoldPotModal();
+            }
+            showToast('已清除所有複製記號！');
+        }
+    }
 
     window.onload = function() { 
         fetchAndRenderGallery(); 
@@ -618,12 +694,7 @@
                     }
                     if (detectedRegion) {
                         document.getElementById('continentInput').value = detectedRegion;
-                        const toast = document.getElementById('toast');
-                        const countryInfo = data.countryName ? `${data.countryName} ` : '';
-                        toast.innerText = `🌍 已自動定位：${countryInfo}`;
-                        toast.style.display = 'block';
-                        setTimeout(() => { toast.style.opacity = '1'; }, 10);
-                        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; toast.innerText = '座標已複製！'; }, 300); }, 3000);
+                        showToast(`🌍 已自動定位：${data.countryName ? data.countryName + ' ' : ''}`);
                     }
                 } catch (err) { console.log('自動定位失敗', err); }
             }
@@ -643,7 +714,6 @@
             
             if (filter !== '全部') query = query.eq('continent', filter);
             
-            // 主牆排除金盆
             if (markerFilter === '全部') {
                 query = query.not('marker', 'in', '("POT","🪴")');
             } else {
@@ -675,6 +745,11 @@
                 const oldTagHTML = isOld ? `<div style="position: absolute; top: 10px; left: 10px; background: #e67e22; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">⏳ 絕版舊圖</div>` : '';
                 const imgStyle = isOld ? 'style="filter: brightness(0.9);"' : '';
 
+                // 檢查是否已複製過
+                const copied = isCoordCopied(coordText);
+                const copiedClass = copied ? 'is-copied' : '';
+                const subHint = copied ? '✔ 已複製過' : '(點擊複製)';
+
                 card.style.position = 'relative';
 
                 card.innerHTML = `
@@ -686,9 +761,9 @@
                             <div class="card-marker">${currentMarker}</div>
                             <button class="report-btn" onclick="openReportModal(${record.id})">⚠️ 報錯</button>
                         </div>
-                        <div class="coordinate" onclick="copyToClipboard('${coordText}')">
+                        <div class="coordinate ${copiedClass}" id="coord-box-${record.id}" onclick="handleCardCopy('${coordText}', ${record.id})">
                             ${coordText}<br>
-                            <small style="font-size: 10px; color: #888;">(點擊複製)</small>
+                            <small style="font-size: 10px; opacity: 0.85;">${subHint}</small>
                         </div>
                     </div>
                 `;
@@ -697,6 +772,17 @@
         } catch (err) {
             console.error('讀取資料失敗:', err.message);
             gallery.innerHTML = '<div class="loading-text" style="color:red;">資料載入失敗，請確認資料庫權限。</div>';
+        }
+    }
+
+    /* 點擊卡片座標複製時同步改變外觀 */
+    function handleCardCopy(coordText, recordId) {
+        copyToClipboard(coordText);
+        markCoordAsCopied(coordText);
+        const box = document.getElementById(`coord-box-${recordId}`);
+        if (box) {
+            box.classList.add('is-copied');
+            box.innerHTML = `${coordText}<br><small style="font-size: 10px; opacity: 0.85;">✔ 已複製過</small>`;
         }
     }
 
@@ -818,6 +904,10 @@
                 const remarkText = item.remark ? `🗓️ ${item.remark}` : '無日期備註';
                 const isOldBadge = item.is_old === 'old' ? '<span style="font-size:10px;background:#e67e22;color:white;padding:1px 5px;border-radius:4px;margin-left:4px;">絕版</span>' : '';
 
+                const copied = isCoordCopied(coord);
+                const btnText = copied ? '✔ 已複製' : '複製座標';
+                const btnClass = copied ? 'gold-copy-btn is-copied' : 'gold-copy-btn';
+
                 const row = document.createElement('div');
                 row.className = 'gold-item';
                 row.innerHTML = `
@@ -833,7 +923,7 @@
                         </div>
                     </div>
                     <div class="gold-item-actions">
-                        <button class="gold-copy-btn" onclick="copyToClipboard('${coord}')">複製座標</button>
+                        <button class="${btnClass}" id="gold-btn-${item.id}" onclick="handleGoldCopy('${coord}', ${item.id})">${btnText}</button>
                         <button class="gold-report-link" onclick="openReportModal(${item.id})">⚠️ 報錯</button>
                     </div>
                 `;
@@ -842,6 +932,16 @@
         } catch (err) {
             console.error('讀取金盆清單失敗:', err);
             container.innerHTML = '<div style="text-align: center; color: red; padding: 20px;">讀取失敗，請確認連線。</div>';
+        }
+    }
+
+    function handleGoldCopy(coord, itemId) {
+        copyToClipboard(coord);
+        markCoordAsCopied(coord);
+        const btn = document.getElementById(`gold-btn-${itemId}`);
+        if (btn) {
+            btn.classList.add('is-copied');
+            btn.innerText = '✔ 已複製';
         }
     }
 
@@ -884,14 +984,23 @@
         }
     }
 
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.opacity = '1'; }, 10);
+        setTimeout(() => { 
+            toast.style.opacity = '0'; 
+            setTimeout(() => { toast.style.display = 'none'; }, 300); 
+        }, 2200);
+    }
+
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
-            const toast = document.getElementById('toast');
-            toast.innerText = '座標已複製！';
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.opacity = '1'; }, 10);
-            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; }, 300); }, 2000);
-        }).catch(err => { alert('複製失敗，請手動複製。'); });
+            showToast('座標已複製！');
+        }).catch(err => { 
+            alert('複製失敗，請手動複製。'); 
+        });
     }
 </script>
 
