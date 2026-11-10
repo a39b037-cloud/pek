@@ -240,6 +240,7 @@
         .report-btn:hover {
             color: #e74c3c;
         }
+
         .coordinate {
             background: #f0f0f0;
             padding: 10px;
@@ -256,13 +257,12 @@
         .coordinate:active {
             background: #e0e0e0;
         }
-        /* 已複製過的樣式 */
         .coordinate.is-copied {
             background: var(--copied-bg);
             border-color: var(--copied-border);
             color: var(--copied-text);
-            font-weight: 500;
         }
+
         .toast {
             position: fixed;
             bottom: 20px;
@@ -424,10 +424,10 @@
         .gold-copy-btn:hover {
             background: #b8860b;
         }
-        .gold-copy-btn.is-copied {
-            background: var(--copied-bg);
-            color: var(--copied-text);
-            border: 1px solid var(--copied-border);
+        .gold-copy-btn.is-cooldown {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
         }
         .gold-report-link {
             background: none;
@@ -547,8 +547,7 @@
             <option value="coord">依座標 (緯度北到南)</option>
         </select>
 
-        <!-- 🌟 新增：清除已複製記號按鈕 -->
-        <button class="clear-copied-btn" onclick="clearCopiedHistory()">🧹 清除複製記號</button>
+        <button class="clear-copied-btn" onclick="clearAllRecordHistory()">🧹 清除標記紀錄</button>
     </div>
 
     <div class="gallery" id="gallery"></div>
@@ -593,11 +592,16 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const GOLD_POT_IMG_URL = "https://i.urusai.cc/6PYuy.jpg";
+    
+    // 主牆常規複製紀錄
     const COPIED_STORAGE_KEY = 'pikmin_copied_coords_v1';
+    // 專屬於金盆的冷卻紀錄 (7天)[cite: 13]
+    const GOLD_COOLDOWN_STORAGE_KEY = 'pikmin_gold_cooldown_v1';
+    const COOLDOWN_DAYS = 7; // 7 天冷卻[cite: 13]
 
     let currentReportId = null;
 
-    /* 讀取與儲存複製紀錄 */
+    /* ---- 1. 主牆常規標記 (花朵、蘑菇) ---- */
     function getCopiedCoords() {
         try {
             return JSON.parse(localStorage.getItem(COPIED_STORAGE_KEY)) || [];
@@ -619,22 +623,63 @@
         }
     }
 
-    /* 清除所有已複製紀錄 */
-    function clearCopiedHistory() {
-        const count = getCopiedCoords().length;
-        if (count === 0) {
-            showToast('目前沒有任何已複製的紀錄喔！');
+    /* ---- 2. 金盆專屬冷卻計算 (7 天)[cite: 13] ---- */
+    function getGoldCooldownData() {
+        try {
+            return JSON.parse(localStorage.getItem(GOLD_COOLDOWN_STORAGE_KEY)) || {};
+        } catch {
+            return {};
+        }
+    }
+
+    function formatCooldownTime(timestamp) {
+        const d = new Date(timestamp);
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const date = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${month}/${date} ${hours}:${minutes}`;
+    }
+
+    function checkGoldCooldown(coord) {
+        const data = getGoldCooldownData();
+        const expireTime = data[coord.trim()];
+        if (!expireTime) return { isCooldown: false };
+
+        const now = Date.now();
+        if (now >= expireTime) {
+            delete data[coord.trim()];
+            localStorage.setItem(GOLD_COOLDOWN_STORAGE_KEY, JSON.stringify(data));
+            return { isCooldown: false };
+        }
+        return { isCooldown: true, expireTime: expireTime, expireText: formatCooldownTime(expireTime) };
+    }
+
+    function setGoldCooldown(coord) {
+        const data = getGoldCooldownData();
+        const expireTime = Date.now() + COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+        data[coord.trim()] = expireTime;
+        localStorage.setItem(GOLD_COOLDOWN_STORAGE_KEY, JSON.stringify(data));
+        return expireTime;
+    }
+
+    /* 清除所有標記紀錄 (含主牆已複製 + 金盆冷卻) */
+    function clearAllRecordHistory() {
+        const copiedCount = getCopiedCoords().length;
+        const goldCount = Object.keys(getGoldCooldownData()).length;
+        if (copiedCount === 0 && goldCount === 0) {
+            showToast('目前沒有任何複製或冷卻紀錄！');
             return;
         }
-        if (confirm(`確定要清除這 ${count} 筆「已複製」的標記嗎？`)) {
+        if (confirm(`確定要清除所有已記錄的複製狀態與金盆冷卻嗎？`)) {
             localStorage.removeItem(COPIED_STORAGE_KEY);
+            localStorage.removeItem(GOLD_COOLDOWN_STORAGE_KEY);
             fetchAndRenderGallery();
-            // 如果金盆清單正好開著，一併重新整理
             const goldModal = document.getElementById('goldPotModal');
             if (goldModal.style.display === 'flex') {
                 openGoldPotModal();
             }
-            showToast('已清除所有複製記號！');
+            showToast('已清空所有標記紀錄！');
         }
     }
 
@@ -745,9 +790,9 @@
                 const oldTagHTML = isOld ? `<div style="position: absolute; top: 10px; left: 10px; background: #e67e22; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">⏳ 絕版舊圖</div>` : '';
                 const imgStyle = isOld ? 'style="filter: brightness(0.9);"' : '';
 
-                // 檢查是否已複製過
+                // 🌟 主牆的花朵和蘑菇只顯示單純複製狀態，不掛冷卻條
                 const copied = isCoordCopied(coordText);
-                const copiedClass = copied ? 'is-copied' : '';
+                const coordClass = copied ? 'is-copied' : '';
                 const subHint = copied ? '✔ 已複製過' : '(點擊複製)';
 
                 card.style.position = 'relative';
@@ -761,7 +806,7 @@
                             <div class="card-marker">${currentMarker}</div>
                             <button class="report-btn" onclick="openReportModal(${record.id})">⚠️ 報錯</button>
                         </div>
-                        <div class="coordinate ${copiedClass}" id="coord-box-${record.id}" onclick="handleCardCopy('${coordText}', ${record.id})">
+                        <div class="coordinate ${coordClass}" id="coord-box-${record.id}" onclick="handleCardCopy('${coordText}', ${record.id})">
                             ${coordText}<br>
                             <small style="font-size: 10px; opacity: 0.85;">${subHint}</small>
                         </div>
@@ -775,7 +820,7 @@
         }
     }
 
-    /* 點擊卡片座標複製時同步改變外觀 */
+    /* 點擊主牆卡片複製 (普通標記) */
     function handleCardCopy(coordText, recordId) {
         copyToClipboard(coordText);
         markCoordAsCopied(coordText);
@@ -878,6 +923,7 @@
         }
     }
 
+    /* ---- 3. 金盆清單專屬：保留 7 天冷卻倒數 ---- */
     async function openGoldPotModal() {
         const modal = document.getElementById('goldPotModal');
         const container = document.getElementById('goldListContainer');
@@ -904,9 +950,10 @@
                 const remarkText = item.remark ? `🗓️ ${item.remark}` : '無日期備註';
                 const isOldBadge = item.is_old === 'old' ? '<span style="font-size:10px;background:#e67e22;color:white;padding:1px 5px;border-radius:4px;margin-left:4px;">絕版</span>' : '';
 
-                const copied = isCoordCopied(coord);
-                const btnText = copied ? '✔ 已複製' : '複製座標';
-                const btnClass = copied ? 'gold-copy-btn is-copied' : 'gold-copy-btn';
+                // 檢查金盆冷卻狀態
+                const cdStatus = checkGoldCooldown(coord);
+                const btnText = cdStatus.isCooldown ? `⌛ ${cdStatus.expireText}` : '複製座標';
+                const btnClass = cdStatus.isCooldown ? 'gold-copy-btn is-cooldown' : 'gold-copy-btn';
 
                 const row = document.createElement('div');
                 row.className = 'gold-item';
@@ -937,11 +984,12 @@
 
     function handleGoldCopy(coord, itemId) {
         copyToClipboard(coord);
-        markCoordAsCopied(coord);
+        const expireTime = setGoldCooldown(coord);
+        const expireText = formatCooldownTime(expireTime);
         const btn = document.getElementById(`gold-btn-${itemId}`);
         if (btn) {
-            btn.classList.add('is-copied');
-            btn.innerText = '✔ 已複製';
+            btn.classList.add('is-cooldown');
+            btn.innerText = `⌛ ${expireText}`;
         }
     }
 
